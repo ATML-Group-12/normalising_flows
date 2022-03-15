@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple, Union
 import torch
 from torch.nn.modules import ModuleList
 
@@ -23,9 +23,18 @@ class FlowModel(torch.nn.Module):
         self.embedding = embedding
         self.layers = ModuleList(layers)
 
-    def forward(self, x: torch.TensorType) -> torch.TensorType:
+    def forward(self, x: torch.TensorType, accumulate: bool) -> Union[torch.TensorType, Tuple[torch.Tensor, torch.Tensor]]:
         starting_dist = self.embedding(x)
         z = starting_dist.rsample()
+        if accumulate:
+            log_jac = torch.zeros(1)
+            for layer in self.layers:
+                z, curr_log_jac = layer(z, accumulate=True)
+                log_jac += curr_log_jac
+            
+            return (z, log_jac)
+
         for layer in self.layers:
-            z = layer(z)
+            z = layer(z, accumulate=True)
+        
         return z
