@@ -1,3 +1,4 @@
+from typing import overload
 import torch
 from torch.distributions.transforms import Transform
 
@@ -19,7 +20,7 @@ class PlanarFlow(Transform):
         self.u = torch.nn.Parameter(torch.zeros((size, 1)))
         super().__init__()
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def _call(self, x: torch.Tensor) -> torch.Tensor:
         r = torch.tanh(torch.transpose(self.w, -2, -1) @ x + self.b)
         return x + self.u @ r
 

@@ -1,4 +1,5 @@
 import torch
+from torch.distributions import constraints
 from torch.distributions.transforms import Transform
 
 
@@ -20,7 +21,15 @@ class RadialFlow(Transform):
         self.a = torch.nn.Parameter(torch.ones(1))
         self.z_0 = torch.nn.Parameter(torch.zeros(size))
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    @constraints.dependent_property(is_discrete=False)
+    def domain(self) -> constraints.Constraint:
+        return constraints.real_vector
+
+    @constraints.dependent_property(is_discrete=False)
+    def codomain(self) -> constraints.Constraint:
+        return constraints.real_vector
+
+    def _call(self, x: torch.Tensor) -> torch.Tensor:
         g = x - self.z_0
         r = torch.abs(g)
         return x + (- self.a + torch.log(1 + torch.exp(self.b))) * (1 / (self.a + r)) * g
