@@ -25,5 +25,5 @@ class RadialFlow(Transform):
         r = torch.abs(g)
         return x + (- self.a + torch.log(1 + torch.exp(self.b))) * (1 / (self.a + r)) * g
 
-    def log_det_jacobian(self, x: torch.Tensor) -> torch.Tensor:
+    def log_abs_det_jacobian(self, x: torch.Tensor) -> torch.Tensor:
         return x

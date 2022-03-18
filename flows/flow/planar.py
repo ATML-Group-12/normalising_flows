@@ -23,5 +23,5 @@ class PlanarFlow(Transform):
         r = torch.tanh(torch.transpose(self.w, -2, -1) @ x + self.b)
         return x + self.u @ r
 
-    def log_det_jacobian(self, x: torch.Tensor) -> torch.Tensor:
+    def log_abs_det_jacobian(self, x: torch.Tensor) -> torch.Tensor:
         return x
