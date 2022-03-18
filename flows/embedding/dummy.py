@@ -1,5 +1,5 @@
 import torch
-from embedding.embedding import Embedding
+from flows.embedding.embedding import Embedding
 from torch.distributions.multivariate_normal import MultivariateNormal
 
 class Dummy(Embedding):
