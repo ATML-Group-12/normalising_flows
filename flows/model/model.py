@@ -18,8 +18,8 @@ class FlowModel(torch.nn.Module):
     def __init__(self, embedding: Embedding, transforms: List[Transform]) -> None:
         super().__init__()
         self.embedding = embedding
-        self.transforms = transforms
+        self.transforms = ModuleList(transforms)
 
-    def forward(self, x: torch.Tensor) -> TransformedDistribution:
+    def forward(self, x: torch.Tensor, *args, **kwargs) -> TransformedDistribution:
         dist = self.embedding(x)
         return TransformedDistribution(dist,  ComposeTransform(self.transforms))

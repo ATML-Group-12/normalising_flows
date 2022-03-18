@@ -1,0 +1,13 @@
+name: flows
+
+channels:
+  - pytorch
+  - defaults
+
+dependencies:
+  - python=3.9
+  - numpy
+  - matplotlib
+  - torch
+  - pyro-ppl
+  - seaborn

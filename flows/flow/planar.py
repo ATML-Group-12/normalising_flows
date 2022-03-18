@@ -1,5 +1,6 @@
 from typing import overload
 import torch
+from torch.distributions import constraints
 from torch.distributions.transforms import Transform
 
 
@@ -20,9 +21,28 @@ class PlanarFlow(Transform):
         self.u = torch.nn.Parameter(torch.zeros((size, 1)))
         super().__init__()
 
+    @staticmethod
+    def h(x: torch.Tensor) -> torch.Tensor:
+        return torch.tanh(x)
+    
+    @staticmethod
+    def hprime(x: torch.Tensor) -> torch.Tensor:
+        return 1 - torch.square(torch.tanh(x))
+
     def _call(self, x: torch.Tensor) -> torch.Tensor:
-        r = torch.tanh(torch.transpose(self.w, -2, -1) @ x + self.b)
+        r = self.h(torch.transpose(self.w, -2, -1) @ x + self.b)
         return x + self.u @ r
 
+    @constraints.dependent_property(is_discrete=False)
+    def domain(self) -> constraints.Constraint:
+        return constraints.real_vector
+
+    @constraints.dependent_property(is_discrete=False)
+    def codomain(self) -> constraints.Constraint:
+        return constraints.real_vector
+    
+    def psi(self, x: torch.Tensor) -> torch.Tensor:
+        return self.hprime( (self.w.T @ x) + self.b)
+
     def log_abs_det_jacobian(self, x: torch.Tensor) -> torch.Tensor:
-        return x
+        return torch.log(torch.abs(1 + self.u.T @ self.psi(x)))
