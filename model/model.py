@@ -1,14 +1,11 @@
 from typing import List, Tuple, Union
 import torch
 from torch.nn.modules import ModuleList
+from torch.distributions import TransformedDistribution
+from torch.distributions.transforms import Transform
 
 from embedding.embedding import Embedding
-from flow.flow import FlowLayer
 
-
-class FlowDist(torch.distributions.Distribution):
-    def rsample(self, sample_shape=torch.Size()):
-        pass
 
 class FlowModel(torch.nn.Module):
     """
@@ -18,23 +15,11 @@ class FlowModel(torch.nn.Module):
     How we select the initial distribution conditional on the original data is  
 
     """
-    def __init__(self, embedding: Embedding, layers: List[FlowLayer]) -> None:
+    def __init__(self, embedding: Embedding, transforms: List[Transform]) -> None:
         super().__init__()
         self.embedding = embedding
-        self.layers = ModuleList(layers)
+        self.transforms = transforms
 
-    def forward(self, x: torch.TensorType, accumulate: bool) -> Union[torch.TensorType, Tuple[torch.Tensor, torch.Tensor]]:
-        starting_dist = self.embedding(x)
-        z = starting_dist.rsample()
-        if accumulate:
-            log_jac = torch.zeros(1)
-            for layer in self.layers:
-                z, curr_log_jac = layer(z, accumulate=True)
-                log_jac += curr_log_jac
-            
-            return (z, log_jac)
-
-        for layer in self.layers:
-            z = layer(z, accumulate=True)
-        
-        return z
+    def forward(self, x: torch.Tensor) -> TransformedDistribution:
+        dist = self.embedding(x)
+        return TransformedDistribution(dist, self.transforms)

@@ -1,8 +1,8 @@
 import torch
-from flow.flow import FlowLayer
+from torch.distributions.transforms import Transform
 
 
-class RadialFlow(FlowLayer):
+class RadialFlow(Transform):
     """
     This class is an implementaion of the idea of the Radial flow from 4.1 (https://arxiv.org/pdf/1505.05770.pdf)
 
