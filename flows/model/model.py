@@ -4,7 +4,7 @@ from torch.nn.modules import ModuleList
 from torch.distributions import TransformedDistribution
 from torch.distributions.transforms import Transform
 
-from embedding.embedding import Embedding
+from flows.embedding.embedding import Embedding
 
 
 class FlowModel(torch.nn.Module):
