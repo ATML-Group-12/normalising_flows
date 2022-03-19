@@ -3,11 +3,12 @@ name: flows
 channels:
   - pytorch
   - defaults
+  - conda-forge
 
 dependencies:
   - python=3.9
   - numpy
   - matplotlib
-  - torch
+  - pytorch
   - pyro-ppl
   - seaborn
