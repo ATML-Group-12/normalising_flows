@@ -1,0 +1,6 @@
+numpy
+matplotlib
+pytorch
+pyro-ppl
+seaborn
+google-colab
