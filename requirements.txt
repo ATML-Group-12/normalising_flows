@@ -1,6 +1,7 @@
 numpy
 matplotlib
-pytorch
+torch
 pyro-ppl
 seaborn
 google-colab
+ipykernel
