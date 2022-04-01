@@ -16,6 +16,11 @@ from flows.flow.radial import RadialFlow
 from flows.model.model import FlowModel
 from flows.loss.elbo import FlowELBO
 from pyro.distributions.torch_transform import TransformModule
+from pyro.infer import EmpiricalMarginal, Importance
+import itertools
+import pyro.poutine as poutine
+
+
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import pathlib
@@ -43,6 +48,7 @@ class Params:
     num_updates: int = 500000
     lr: float = 1e-5
     momentum: float = 0.9
+    num_importance: int = 200
     save_images: bool = True
 
 
@@ -54,7 +60,8 @@ def run(params: Params):
     NUM_EPOCHS = 1 if smoke_test else 100
     TEST_FREQUENCY = 5
     batch_size = 128
-    vae = VAE()
+
+    pyro.clear_param_store()
 
     def train(svi, train_loader, use_cuda=False):
         # initialize loss accumulator
@@ -91,7 +98,6 @@ def run(params: Params):
     test_loader = torch.utils.data.DataLoader(dataset=BinarisedMNIST(root='./data', train=False, download=True),
                                               batch_size=batch_size, shuffle=True, num_workers=2)
     # clear param store
-    pyro.clear_param_store()
 
     # setup the VAE
     vae = VAE(use_cuda=USE_CUDA)
@@ -101,6 +107,30 @@ def run(params: Params):
     optimizer = Adam(adam_args)
 
     # setup the inference algorithm
+    importance = Importance(vae.model, guide=None, num_samples=params.num_importance)
+    print("doing importance sampling...")
+    observe = BinarisedMNIST(root='./data', train=True, download=True)
+    obs = torch.stack(list(itertools.islice([x[0] for x in observe], 5)))
+
+    posterior = importance.run(
+        obs
+    )
+    print(posterior)
+    print(obs.shape)
+    emp_marginal = EmpiricalMarginal(
+        posterior, sites=["latent"]
+    )
+
+    # calculate statistics over posterior samples
+    posterior_mean = emp_marginal.mean
+    posterior_std_dev = emp_marginal.variance.sqrt()
+
+    # report results
+    inferred_mu = posterior_mean.detach().numpy()
+    inferred_mu_uncertainty = posterior_std_dev.detach().numpy()
+    print("inferred mu: {}".format(inferred_mu))
+    print("inferred mu uncertainty: {}".format(inferred_mu_uncertainty))
+    pyro.clear_param_store()
     svi = SVI(vae.model, vae.guide, optimizer, loss=Trace_ELBO())
 
     train_elbo = []
