@@ -12,6 +12,9 @@ from flows.embedding.basic import Basic
 from flows.flow.planar import PlanarFlow
 from flows.flow.radial import RadialFlow
 from flows.model.model import FlowModel
+from nice.layer.nice_ortho import NiceOrthogonal
+from nice.layer.nice_perm import NicePermutation
+from nice.model.model import NiceModel
 from flows.loss.elbo import FlowELBO
 from experiments.test_functions import u1, u2, u3, u4
 from pyro.distributions.torch_transform import TransformModule
@@ -43,12 +46,20 @@ def run(params: Params):
     k = params.flow_length
     dims = params.dims
     embedding = Basic(dims)
-    transforms = list([params.layer_type(dims) for i in range(0,k)])
-
-    model = FlowModel(
-        embedding=embedding,
-        transforms=transforms
-    )
+    if "flow" in params.name:
+        transforms = [params.layer_type(dims) for _ in range(k)]
+        model = FlowModel(
+            embedding=embedding,
+            transforms=transforms
+        )
+    elif "nice" in params.name:
+        transforms = [params.layer_type(dims, dims//2, 4, dims) for _ in range(k)]
+        model = NiceModel(
+            embedding=embedding,
+            transforms=transforms
+        )
+    else:
+        raise ValueError("Unknown model")
 
     optimizer = torch.optim.RMSprop(model.parameters(), lr=params.lr, momentum=params.momentum)
 
@@ -76,11 +87,11 @@ def run(params: Params):
             sns.kdeplot(x=samples[0,:,0].detach().numpy(), y=samples[0,:,1].detach().numpy(), cmap="Blues", shade=True)
             plt.show()
             if params.save_images:
-                plt.savefig(f"runs/{params.name}/images/{step}.png")
+                plt.savefig(f"runs/{params.name}/images/{step:05}.png")
 
 if __name__ == "__main__":
     energy_functions = {"u1": u1, "u2": u2, "u3": u3, "u4": u4}
-    layer_types = {"radial": RadialFlow, "planar": PlanarFlow}
+    layer_types = {"radialflow": RadialFlow, "planarflow": PlanarFlow, "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
     flow_lengths = [2, 8, 32]
     for layer_name, layer_type in layer_types.items():
         for function_name, function in energy_functions.items():
