@@ -49,4 +49,4 @@ class BinarisedMNIST(torch.utils.data.Dataset):
         if self.train:
             return len(self.train_data)
         else:
-            return
+            return len(self.test_data)

@@ -4,6 +4,10 @@ import torch.nn as nn
 import pyro
 import pyro.distributions as dist
 
+from flows.flow.planar import PlanarFlow
+
+from pyro.distributions.transforms import ComposeTransformModule
+
 
 class InferenceNetwork(nn.Module):
     """
@@ -18,12 +22,12 @@ class InferenceNetwork(nn.Module):
         self.fc22 = nn.Linear(hidden_dim, z_dim)
         self.softplus = nn.Softplus()
 
-    def forward(self, x):
+    def forward(self, x) -> dist.Distribution:
         x = x.reshape(-1, 784)
         hidden = self.softplus(self.fc1(x))
         z_loc = self.fc21(hidden)
         z_scale = torch.exp(self.fc22(hidden))
-        return z_loc, z_scale
+        return dist.Normal(z_loc, z_scale)
 
 
 class DLGM(nn.Module):
@@ -55,12 +59,12 @@ class VAE(nn.Module):
 
     """
 
-    def __init__(self, z_dim: int = 50, hidden_dim: int = 400, use_cuda: bool = False):
+    def __init__(self, z_dim: int = 50, hidden_dim: int = 400, use_cuda: bool = False, k: int = 10):
         super().__init__()
         # create the encoder and decoder networks
         self.encoder = InferenceNetwork(z_dim, hidden_dim)
         self.decoder = DLGM(z_dim, hidden_dim)
-
+        self.transformation = ComposeTransformModule(list([PlanarFlow(z_dim) for i in range(0, k)]))
         if use_cuda:
             self.cuda()
         self.use_cuda = use_cuda
@@ -68,21 +72,27 @@ class VAE(nn.Module):
 
     def model(self, x):
         pyro.module("decoder", self.decoder)
-        with pyro.plate("data", x.shape[0]):
-            z_loc = x.new_zeros(torch.Size((x.shape[0], self.z_dim)))
-            z_scale = x.new_ones(torch.Size((x.shape[0], self.z_dim)))
-            z = pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
-            loc_img = self.decoder(z)
+        pyro.module("transformation", self.transformation)
+        with pyro.plate("x", x.shape[0]):
+            z_loc = x.new_zeros(torch.Size((self.z_dim,)))
+            z_scale = x.new_ones(torch.Size((self.z_dim,)))
+            base_dist = dist.Normal(z_loc, z_scale)
+            transformed_dist = dist.TransformedDistribution(base_dist, self.transformation)
+
+            z = pyro.sample("latent", transformed_dist)
+            loc_img = self.decoder(self.transformation.inv(z))
             pyro.sample("obs", dist.Bernoulli(loc_img).to_event(1), obs=x.reshape(-1, 784))
 
     def guide(self, x):
         pyro.module("encoder", self.encoder)
-        with pyro.plate("data", x.shape[0]):
-            z_loc, z_scale = self.encoder(x)
-            pyro.sample("latent", dist.Normal(z_loc, z_scale).to_event(1))
+        pyro.module("transformation", self.transformation)
+        with pyro.plate("x", x.shape[0]):
+            out_dist = self.encoder(x)
+            transformed_dist = dist.TransformedDistribution(out_dist, self.transformation)
+            pyro.sample("latent", transformed_dist)
 
     def reconstruct_img(self, x):
-        z_loc, z_scale = self.encoder(x)
-        z = dist.Normal(z_loc, z_scale).sample()
+        out_dist = self.encoder(x)
+        z = out_dist.sample()
         loc_img = self.decoder(z)
         return loc_img
