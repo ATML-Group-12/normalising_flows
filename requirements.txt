@@ -5,3 +5,5 @@ pyro-ppl
 seaborn
 google-colab
 ipykernel
+gpytorch
+torchvision
