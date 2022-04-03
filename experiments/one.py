@@ -19,8 +19,10 @@ from flows.loss.elbo import FlowELBO
 from experiments.test_functions import u1, u2, u3, u4
 from pyro.distributions.torch_transform import TransformModule
 from torch.utils.tensorboard import SummaryWriter
+import io
 from tqdm import tqdm
 import pathlib
+from datetime import datetime
 
 
 
@@ -66,9 +68,7 @@ def run(params: Params):
     NUM_PARAMETERS = sum(p.numel() for p in model.parameters())
     print("Number of parameters:", NUM_PARAMETERS)
     writer = SummaryWriter(f"runs/{params.name}")
-    pathlib.Path(f"runs/{params.name}/images").mkdir(parents=True, exist_ok=True) 
-
-
+    # pathlib.Path(f"runs/{params.name}/images").mkdir(parents=True, exist_ok=True) 
 
     NUM_STEPS = int(np.ceil(params.num_updates / NUM_PARAMETERS))
     pbar = tqdm(range(NUM_STEPS))
@@ -82,14 +82,16 @@ def run(params: Params):
         writer.add_scalar("embedding_covariance_determinant", torch.det(model.embedding.cov).item(), step * NUM_PARAMETERS)
         writer.add_scalar("embedding_mean_magnitude", torch.norm(torch.abs(model.embedding.mean)).item(), step * NUM_PARAMETERS)
 
-        if step % 2000 == 0:
+        if params.save_images and step % 2000 == 0:
             samples = model(torch.ones([3000,1])).sample((1,)).detach()
-            sns.kdeplot(x=samples[0,:,0].detach().numpy(), y=samples[0,:,1].detach().numpy(), cmap="Blues", shade=True)
-            plt.show()
-            if params.save_images:
-                plt.savefig(f"runs/{params.name}/images/{step:05}.png")
+            samples = samples.view((3000,dims))
+            sns.kdeplot(x=samples[:,0].detach().numpy(), y=samples[:,1].detach().numpy(), cmap="Blues", shade=True)
+            writer.add_figure("density_plot", plt.gcf(), step * NUM_PARAMETERS)
+    
+    torch.save(model.state_dict(), f"runs/{params.name}/model.pt")
 
 if __name__ == "__main__":
+    start_datetime = datetime.now().strftime("%Y%m%d-%H%M%S")
     energy_functions = {"u1": u1, "u2": u2, "u3": u3, "u4": u4}
     layer_types = {"radialflow": RadialFlow, "planarflow": PlanarFlow, "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
     flow_lengths = [2, 8, 32]
@@ -100,6 +102,9 @@ if __name__ == "__main__":
                     layer_type=layer_type,
                     energy_function=function,
                     flow_length=flow_length,
-                    name=f"{layer_name}-{function_name}-{str(flow_length)}"
+                    name=f"{start_datetime}/{layer_name}-{function_name}-{str(flow_length)}"
                 )
+                print("Running", params.name)
                 run(params)
+                print("Done")
+                print("-" * 40)
