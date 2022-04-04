@@ -100,7 +100,6 @@ if __name__ == "__main__":
     flow_lengths = [2, 8, 32]
     for function_name, function in energy_functions.items():
         for layer_name, layer_type in layer_types.items():
-            if "flow" in layer_name: continue
             for flow_length in flow_lengths:
                 params = Params(
                     layer_type=layer_type,
