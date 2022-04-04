@@ -74,7 +74,7 @@ def run(params: Params):
     pbar = tqdm(range(NUM_STEPS))
     for step in pbar:
         optimizer.zero_grad()
-        loss = FlowELBO(params.energy_function, model(torch.tensor([100,1])), num_samples=1, epoch=step)
+        loss = FlowELBO(params.energy_function, model(torch.ones([100,1])), num_samples=1, epoch=step)
         writer.add_scalar("_loss", loss.item(), step * NUM_PARAMETERS)
         pbar.set_postfix_str("loss: " + '{0:.2f}'.format(loss.item()))
         loss.backward()
