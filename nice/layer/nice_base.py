@@ -84,7 +84,7 @@ class NiceBase(nn.Module, Transform):
         return self._inverse
 
     def log_abs_det_jacobian(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        return torch.zeros(x.shape[0])
+        return torch.zeros(x.shape[:-1])
 
     def __hash__(self) -> int:
         return super(nn.Module).__hash__()
