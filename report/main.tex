@@ -1,5 +1,38 @@
-\documentclass{article}
+\documentclass[12pt]{ociamthesis}
+\usepackage{amssymb}
+
+\title{Advanced Machine Learning \\
+        Group 12 Project Report}
+        
+\subtitle{Reproducing results from "Variational Inference with Normalizing \\[1ex] Flows" [Danilo Jimenez, Rezende Shakir Mohamed]}
+
+\author{John Ryan, Man Hon Fan, Charalampos Kokkalis, Kieran Gall}
+
+\date{Trinity 2022}
+
+
 
 \begin{document}
-Advanced ML Report
+
+\setcounter{tocdepth}{3}
+
+
+\maketitle
+
+\begin{romanpages}
+\tableofcontents
+\end{romanpages}
+
+
+\include{abstract}          
+\include{chapter1}
+\include{chapter2}
+\include{conclusions}
+
+
+\renewcommand{\bibname}{References}
+\bibliography{refs}        %use a bibtex bibliography file refs.bib
+\bibliographystyle{plain}
+
+
 \end{document}
