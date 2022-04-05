@@ -15,7 +15,9 @@ def FlowELBO(
     """
     zk = var_dist.rsample((num_samples,))
     with torch.no_grad():
-        true_sample = torch.log(torch.clamp(true_density(zk.T), min=1e-12, max=None))
+        true_sample = torch.log(torch.clamp(true_density(zk.T), min=1e-12, max=None)).T
     # print(zk.shape)
+    # print(true_sample.shape)
+    # print(var_dist.log_prob(zk).shape)
     w = var_dist.log_prob(zk) - (min(1, 0.01 + epoch/10000) * true_sample)
     return w.mean()

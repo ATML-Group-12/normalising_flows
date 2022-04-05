@@ -29,8 +29,11 @@ class RadialFlow(TransformModule):
     def _ha(self, r: torch.Tensor) -> torch.Tensor:
         return 1 / (self.alpha + r)
 
-    def _hprimea(self, u: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
-        return -u / (torch.square(self.alpha + r) * r)
+    def _hprimea(self, r: torch.Tensor) -> torch.Tensor:
+        """
+        This is the derivative of the h function with respect to r
+        """
+        return -1 / torch.square(self.alpha + r)
 
     def _call(self, x: torch.Tensor) -> torch.Tensor:
         g = x - self.z_0
@@ -38,11 +41,16 @@ class RadialFlow(TransformModule):
         return x + (self.beta) * (1 / (self.alpha + r)) * g
 
     def log_abs_det_jacobian(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        g = x - self.z_0
-        r = torch.abs(g)
+        """
+        From the paper:
+        |det J(f)| = [1 + b h(a,r)]^(d-1) [1 + b h(a,r) + b h'(a,r) r]
+        where h'(a,r) is dh(a,r)/dr,
+        and the formula has accounted for dr/dz.
+        """
+        r = torch.norm(x - self.z_0, dim=-1)
 
         h = self._ha(r)
-        h_prime = self._hprimea(g, r)
+        h_prime = self._hprimea(r)
 
         return (self.d - 1) * torch.log(1 + self.beta * h) + torch.log(1 + (self.beta * h) + (self.beta * h_prime * r))
 
@@ -69,4 +77,33 @@ class RadialFlow(TransformModule):
         t = torch.norm(y - self.z_0, dim=-1)
         b = self.beta + self.alpha - t
         r = ( (-b) + torch.sqrt( torch.square(b) + 4 * self.alpha * t)) / 2
-        return ((self.alpha + r) / (self.alpha + self.beta + r )) * y + (self.beta / (self.alpha + self.beta + r )) * self.z_0
+        # return ((self.alpha + r) / (self.alpha + self.beta + r )) * y + (self.beta / (self.alpha + self.beta + r )) * self.z_0
+        # most of code below is to ensure shapes are same as y
+        frontconst = (self.alpha + r) / (self.alpha + self.beta + r)
+        repeatshape = [1 for _ in y.shape[:-1]] + [y.shape[-1]]
+        while len(frontconst.shape) < len(y.shape):
+            frontconst = frontconst.unsqueeze(-1)
+        frontpart = frontconst.repeat(repeatshape) * y
+        backconst = (self.beta / (self.alpha + self.beta + r ))
+        while len(backconst.shape) < len(y.shape):
+            backconst = backconst.unsqueeze(-1)
+        z_0copy = torch.clone(self.z_0)
+        while len(z_0copy.shape) < len(y.shape):
+            z_0copy = z_0copy.unsqueeze(0)
+        backpart = backconst.repeat(repeatshape) * self.z_0.repeat(*y.shape[:-1],1)
+        return frontpart + backpart
+
+
+if __name__ == "__main__":
+    f = RadialFlow(4)
+    x = torch.randn(100, 4)
+    y = f(x)
+    res = f.log_abs_det_jacobian(x,y)
+    assert res.shape == (100,)
+    inverse = f._inverse(y)
+    assert torch.allclose(inverse, x), "inverse should be equal to x, but mean diff is {}".format(torch.mean(torch.abs(inverse - x)))
+    x = torch.randn(1, 100, 4)
+    y = f(x)
+    res = f.log_abs_det_jacobian(x,y)
+    inverse = f._inverse(y)
+    assert torch.allclose(inverse, x), "inverse should be equal to x, but mean diff is {}".format(torch.mean(torch.abs(inverse - x)))
