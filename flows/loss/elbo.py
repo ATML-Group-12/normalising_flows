@@ -14,8 +14,8 @@ def FlowELBO(
             - Eq0(z0)[log p(x, zK)]
     """
     zk = var_dist.rsample((num_samples,))
-    with torch.no_grad():
-        true_sample = torch.log(torch.clamp(true_density(zk.T), min=1e-12, max=None)).T
+    # with torch.no_grad():
+    true_sample = torch.log(torch.clamp(true_density(zk.T), min=1e-12, max=None)).T
     # print(zk.shape)
     # print(true_sample.shape)
     # print(var_dist.log_prob(zk).shape)
