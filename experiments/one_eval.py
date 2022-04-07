@@ -52,14 +52,13 @@ def get_kl(params: Params):
         )
     model.load_state_dict(torch.load(params.model_path))
     model.eval()
-    return KLDivergence(model(torch.tensor([1,1])), params.energy_function, params.num_samples)
+    return KLDivergence(model(torch.tensor([[1,1]])), params.energy_function, params.num_samples)
 
 if __name__ == "__main__":
     energy_functions = {"u1": u1, "u2": u2, "u3": u3, "u4": u4}
     layer_types = {"radialflow": RadialFlow, "planarflow": PlanarFlow, "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
-    layer_types = {"nicepermutation": NicePermutation}
     flow_lengths = [2, 8, 32]
-    kls = pd.DataFrame()
+    kls = []
     for layer_name, layer_type in layer_types.items():
         for function_name, function in energy_functions.items():
             for flow_length in flow_lengths:
@@ -67,16 +66,17 @@ if __name__ == "__main__":
                     layer_type=layer_type,
                     energy_function=function,
                     flow_length=flow_length,
-                    model_path=f"runs/20220403-124620/{layer_name}-{function_name}-{str(flow_length)}/model.pt",
+                    model_path=f"runs/20220406-160806/{layer_name}-{function_name}-{str(flow_length)}/model.pt",
                 )
                 print("Running", params.model_path)
                 kl = get_kl(params)
-                kls.append({
+                kls.append(pd.DataFrame([{
                     "layer_type": layer_name,
                     "energy_function": function_name,
                     "flow_length": flow_length,
-                    "kl": kl
-                })
+                    "kl": kl.item()
+                }]))
                 print("Done")
                 print("-" * 40)
+    kls = pd.concat(kls,ignore_index=True)
     kls.to_csv("kls.csv")
