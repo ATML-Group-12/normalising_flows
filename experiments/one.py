@@ -71,22 +71,27 @@ def run(params: Params):
     # pathlib.Path(f"runs/{params.name}/images").mkdir(parents=True, exist_ok=True) 
 
     NUM_STEPS = int(np.ceil(params.num_updates / NUM_PARAMETERS))
-    RECORD_EVERY = int(np.floor(NUM_STEPS / (params.num_progress_images-1))) if params.num_progress_images > 1 else NUM_STEPS+1
-    if params.num_progress_images in [1,2]:
-        RECORD_EVERY = NUM_STEPS - 1
+    RECORD_EVERY = int(np.ceil(NUM_STEPS / (params.num_progress_images-1))) if params.num_progress_images > 1 else NUM_STEPS+1
     pbar = tqdm(range(NUM_STEPS))
     for step in pbar:
         optimizer.zero_grad()
-        loss = FlowELBO(params.energy_function, model(torch.ones([100,1])), num_samples=1, epoch=step)
+        loss = FlowELBO(params.energy_function, model(torch.tensor([[1,1]])), num_samples=100, epoch=step)
         writer.add_scalar("_loss", loss.item(), step * NUM_PARAMETERS)
         pbar.set_postfix_str("loss: " + '{0:.2f}'.format(loss.item()))
         loss.backward()
         optimizer.step()
         writer.add_scalar("embedding_covariance_determinant", torch.det(model.embedding.cov).item(), step * NUM_PARAMETERS)
         writer.add_scalar("embedding_mean_magnitude", torch.norm(torch.abs(model.embedding.mean)).item(), step * NUM_PARAMETERS)
-
-        if params.num_progress_images>0 and step % RECORD_EVERY == 0:
-            samples = model(torch.ones([3000,1])).sample((1,)).detach()
+        transformed_mean = model.embedding.mean.unsqueeze(0)
+        for t in model.transforms:
+            transformed_mean = t(transformed_mean)
+        writer.add_scalar("transformed_mean_magnitude", torch.norm(torch.abs(transformed_mean)).item(), step * NUM_PARAMETERS)
+        if isinstance(model.transforms[0], RadialFlow):
+            writer.add_scalars("radial_flow_alpha", {f"layer_{i}":model.transforms[i].alpha for i in range(flow_length)}, step * NUM_PARAMETERS)
+            writer.add_scalars("radial_flow_beta", {f"layer_{i}":model.transforms[i].beta for i in range(flow_length)}, step * NUM_PARAMETERS)
+        if params.num_progress_images>0 and (step == NUM_STEPS - 1 or step % RECORD_EVERY == 0):
+            samples = model(torch.tensor([[1,1]])).sample((3000,)).detach()
+            # samples = model(torch.ones([3000,1])).sample((1,)).detach()
             samples = samples.view((3000,dims))
             sns.kdeplot(x=samples[:,0].detach().numpy(), y=samples[:,1].detach().numpy(), cmap="Blues", shade=True)
             writer.add_figure("density_plot", plt.gcf(), step * NUM_PARAMETERS)
