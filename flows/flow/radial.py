@@ -22,9 +22,17 @@ class RadialFlow(TransformModule):
     def __init__(self, size: int) -> None:
         super().__init__()
         self.d = size
-        self.beta = torch.nn.Parameter(torch.zeros(1))
-        self.alpha = torch.nn.Parameter(torch.ones(1))
+        self.log_alpha = torch.nn.Parameter(torch.zeros(1))
+        self.log_beta_diff = torch.nn.Parameter(torch.zeros(1))
         self.z_0 = torch.nn.Parameter(torch.zeros(self.d))
+    
+    @property
+    def alpha(self) -> torch.Tensor:
+        return self.log_alpha.exp()
+
+    @property
+    def beta(self) -> torch.Tensor:
+        return -self.alpha + self.log_beta_diff.exp()
 
     def _ha(self, r: torch.Tensor) -> torch.Tensor:
         return 1 / (self.alpha + r)
@@ -56,6 +64,9 @@ class RadialFlow(TransformModule):
 
     def _inverse(self, y: torch.Tensor) -> torch.Tensor:
         """
+        EDIT: paper missed the absolute value on RHS on (26),
+        so basically assumes b>=a.
+        We assume this is the case in our construction.
         From (26)
 
         | y - z_0 | = r ( 1 + b / (a + r))
