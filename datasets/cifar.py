@@ -15,7 +15,7 @@ class CustomCIFAR(torch.utils.data.Dataset):
         self.download = download
         self.eps = 0.0001
         if self.train:
-            self.train_data = torchvision.datasets.CIFAR10(
+            self.data = torchvision.datasets.CIFAR10(
                 self.root,
                 train=True,
                 download=self.download,
@@ -26,7 +26,7 @@ class CustomCIFAR(torch.utils.data.Dataset):
                 ])
             )
         else:
-            self.test_data = torchvision.datasets.CIFAR10(
+            self.data = torchvision.datasets.CIFAR10(
                 self.root,
                 train=False,
                 download=self.download,
@@ -39,10 +39,7 @@ class CustomCIFAR(torch.utils.data.Dataset):
             )
 
     def __getitem__(self, index):
-        if self.train:
-            img, target = self.train_data[index]
-        else:
-            img, target = self.test_data[index]
+        img, target = self.data[index]
 
         if self.transform is not None:
             img = self.transform(img)
@@ -53,7 +50,4 @@ class CustomCIFAR(torch.utils.data.Dataset):
         return img, target
 
     def __len__(self):
-        if self.train:
-            return len(self.train_data)
-        else:
-            return
+        return len(self.data)
