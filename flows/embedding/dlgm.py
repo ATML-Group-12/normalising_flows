@@ -40,7 +40,7 @@ class DLGM(nn.Module):
         super().__init__()
         self.input_dim = input_dim
         self.fc1 = nn.Linear(z_dim, hidden_dim)
-        self.fc21 = nn.Linear(hidden_dim, self.input_dim * (2 if binary else 1))
+        self.fc21 = nn.Linear(hidden_dim, self.input_dim * (1 if binary else 2))
         self.softplus = nn.Softplus()
         self.sigmoid = nn.Sigmoid()
         self.binary = binary
@@ -48,12 +48,12 @@ class DLGM(nn.Module):
     def forward(self, z):
         hidden = self.softplus(self.fc1(z))
         if self.binary:
+            loc_img = self.sigmoid(self.fc21(hidden))
+            return loc_img
+        else:
             out = self.sigmoid(self.fc21(hidden))
             loc_img, scale_img = out[..., :self.input_dim], out[..., self.input_dim:]
             return loc_img, scale_img
-        else:
-            loc_img = self.sigmoid(self.fc21(hidden))
-            return loc_img
 
 
 class VAE(nn.Module):
@@ -85,6 +85,7 @@ class VAE(nn.Module):
             self.cuda()
         self.use_cuda = use_cuda
         self.z_dim = z_dim
+        self.binary = binary
 
     def model(self, x):
         pyro.module("decoder", self.decoder)
@@ -96,7 +97,7 @@ class VAE(nn.Module):
             transformed_dist = dist.TransformedDistribution(base_dist, self.transformation)
 
             z = pyro.sample("latent", transformed_dist)
-            if self.binary == 28*28:
+            if self.binary:
                 loc_img = self.decoder(self.transformation.inv(z))
                 pyro.sample("obs", dist.Bernoulli(loc_img).to_event(1), obs=x.reshape(-1, self.input_dim))
             else:
