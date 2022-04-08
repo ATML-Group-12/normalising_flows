@@ -9,11 +9,13 @@ import numpy as np
 import seaborn as sns
 import torch
 from datasets.mnist import BinarisedMNIST
-from flows.embedding.basic import Basic
+from datasets.cifar import CustomCIFAR
 from flows.embedding.dlgm import VAE
 from flows.flow.planar import PlanarFlow
 from flows.flow.radial import RadialFlow
-from flows.model.model import FlowModel
+from nice.layer.nice_ortho import NiceOrthogonal
+from nice.layer.nice_perm import NicePermutation
+from nice.layer.diag_scale import DiagonalScaling
 from flows.loss.elbo import FlowELBO
 from pyro.distributions.torch_transform import TransformModule
 from pyro.infer import EmpiricalMarginal, Importance
@@ -37,29 +39,36 @@ import pyro.distributions as dist
 from pyro.infer import SVI, Trace_ELBO
 from pyro.optim import Adam
 
+from datetime import datetime
+from tqdm import tqdm
+
 smoke_test = 'CI' in os.environ
 
 
 @dataclass
 class Params:
-    seed: int = 0
+    layer_type: Callable[..., TransformModule]
+    name : str
     flow_length: int = 2
+    seed: int = 0
+    dataset: str = "MNIST"
     dims: int = 2
     num_updates: int = 500000
     lr: float = 1e-5
     momentum: float = 0.9
     num_importance: int = 200
-    save_images: bool = True
+
 
 
 def run(params: Params):
     random.seed(params.seed)
     np.random.seed(params.seed)
     torch.manual_seed(params.seed)
-    USE_CUDA = False
-    NUM_EPOCHS = 1 if smoke_test else 100
+
+    USE_CUDA = torch.cuda.is_available()
+    NUM_EPOCHS = 1 if smoke_test else params.num_updates // 100
     TEST_FREQUENCY = 5
-    batch_size = 128
+    batch_size = 100
 
     pyro.clear_param_store()
 
@@ -93,14 +102,37 @@ def run(params: Params):
         normalizer_test = len(test_loader.dataset)
         total_epoch_loss_test = test_loss / normalizer_test
         return total_epoch_loss_test
-    train_loader = torch.utils.data.DataLoader(dataset=BinarisedMNIST(root='./data', train=True, download=True),
-                                               batch_size=batch_size, shuffle=True, num_workers=2)
-    test_loader = torch.utils.data.DataLoader(dataset=BinarisedMNIST(root='./data', train=False, download=True),
-                                              batch_size=batch_size, shuffle=True, num_workers=2)
+
+    if params.dataset == "MNIST":
+        train_loader = torch.utils.data.DataLoader(dataset=BinarisedMNIST(root='./data', train=True, download=True),
+                                                batch_size=batch_size, shuffle=True)
+        test_loader = torch.utils.data.DataLoader(dataset=BinarisedMNIST(root='./data', train=False, download=True),
+                                                batch_size=batch_size, shuffle=True)
+    elif params.dataset == "CIFAR":
+        train_loader = torch.utils.data.DataLoader(dataset=CustomCIFAR(root='./data', train=True, download=True),
+                                                batch_size=batch_size, shuffle=True)
+        test_loader = torch.utils.data.DataLoader(dataset=CustomCIFAR(root='./data', train=False, download=True),
+                                                batch_size=batch_size, shuffle=True)
+    else:
+        raise ValueError(f"Unknown dataset: {params.dataset}")
     # clear param store
 
+    Z_DIM = 50
+    if "flow" in params.name:
+        transforms = [params.layer_type(Z_DIM) for _ in range(params.flow_length)]
+    elif "nice" in params.name:
+        transforms = [params.layer_type(Z_DIM, Z_DIM//2, 4, Z_DIM) for _ in range(params.flow_length)]
+    else:
+        transforms = [DiagonalScaling(Z_DIM)]
+
+
+
     # setup the VAE
-    vae = VAE(use_cuda=USE_CUDA)
+    vae = VAE(
+        input_dim=(28*28 if params.dataset == "MNIST" else 8*8*3),
+        use_cuda=USE_CUDA,
+        transformation=transforms
+    )
 
     # setup the optimizer
     adam_args = {"lr": params.lr}
@@ -109,7 +141,12 @@ def run(params: Params):
     # setup the inference algorithm
     importance = Importance(vae.model, guide=None, num_samples=params.num_importance)
     print("doing importance sampling...")
-    observe = BinarisedMNIST(root='./data', train=True, download=True)
+    
+    if params.dataset == "MNIST":
+        observe = BinarisedMNIST(root='./data', train=True, download=True)
+    elif params.dataset == "CIFAR":
+        observe = CustomCIFAR(root='./data', train=True, download=True)
+    
     obs = torch.stack(list(itertools.islice([x[0] for x in observe], 5)))
 
     posterior = importance.run(
@@ -136,18 +173,53 @@ def run(params: Params):
     train_elbo = []
     test_elbo = []
     # training loop
-    for epoch in range(NUM_EPOCHS):
+    writer = SummaryWriter(log_dir=f"runs/{params.name}")
+    for epoch in tqdm(range(NUM_EPOCHS)):
         total_epoch_loss_train = train(svi, train_loader, use_cuda=USE_CUDA)
         train_elbo.append(-total_epoch_loss_train)
-        print("[epoch %03d]  average training loss: %.4f" % (epoch, total_epoch_loss_train))
+        # print("[epoch %03d] average training loss: %.4f" % (epoch, total_epoch_loss_train))
+        writer.add_scalar("train_loss", total_epoch_loss_train, epoch)
 
         if epoch % TEST_FREQUENCY == 0:
             # report test diagnostics
             total_epoch_loss_test = evaluate(svi, test_loader, use_cuda=USE_CUDA)
             test_elbo.append(-total_epoch_loss_test)
-            print("[epoch %03d] average test loss: %.4f" % (epoch, total_epoch_loss_test))
+            # print("[epoch %03d] average test loss: %.4f" % (epoch, total_epoch_loss_test))
+            writer.add_scalar("test_loss", total_epoch_loss_test, epoch)
+    
+    writer.close()
+    torch.save(vae.state_dict(), f"runs/{params.name}/model.pt")
 
 
 if __name__ == "__main__":
-    params = Params()
-    run(params)
+    start_datetime = datetime.now().strftime("%Y%m%d-%H%M%S")
+    datasets = ["MNIST","CIFAR"]
+    layer_types = {"radialflow": RadialFlow, "planarflow": PlanarFlow, "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
+    flow_lengths = [10,20,40,80]
+
+    def dummy(x: torch.Tensor) -> TransformModule:
+        return DiagonalScaling
+
+    for dataset in datasets:
+        # params = Params(
+        #     layer_type=dummy,
+        #     dataset=dataset,
+        #     flow_length=0,
+        #     name=f"{start_datetime}/{dataset}-diagscaling"
+        # )
+        # print("Running", params.name)
+        # run(params)
+        # print("Done")
+        # print("-" * 40)
+        for layer_name, layer_type in layer_types.items():
+            for flow_length in flow_lengths:
+                params = Params(
+                    layer_type=layer_type,
+                    dataset=dataset,
+                    flow_length=flow_length,
+                    name=f"{start_datetime}/{dataset}-{layer_name}-{str(flow_length)}"
+                )
+                print("Running", params.name)
+                run(params)
+                print("Done")
+                print("-" * 40)
