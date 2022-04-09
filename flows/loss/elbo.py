@@ -4,7 +4,7 @@ from torch.nn import Module
 
 
 def FlowELBO(
-        true_density: Callable[[torch.Tensor],
+        energy_function: Callable[[torch.Tensor],
                                torch.Tensor],
         var_dist: torch.distributions.TransformedDistribution, num_samples: int, epoch: int) -> torch.Tensor:
     """
@@ -15,9 +15,8 @@ def FlowELBO(
     """
     zk = var_dist.rsample((num_samples,))
     # with torch.no_grad():
-    true_sample = torch.log(torch.clamp(true_density(zk.T), min=1e-12, max=None)).T
+    true_sample = - energy_function(zk)
     # print(zk.shape)
     # print(true_sample.shape)
-    # print(var_dist.log_prob(zk).shape)
     w = var_dist.log_prob(zk) - (min(1, 0.01 + epoch/10000) * true_sample)
     return w.mean()

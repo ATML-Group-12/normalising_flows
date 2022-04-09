@@ -75,7 +75,7 @@ def run(params: Params):
     pbar = tqdm(range(NUM_STEPS))
     for step in pbar:
         optimizer.zero_grad()
-        loss = FlowELBO(params.energy_function, model(torch.tensor([[1,1]])), num_samples=100, epoch=step)
+        loss = FlowELBO(params.energy_function, model(torch.tensor([[[1]]])), num_samples=100, epoch=step)
         writer.add_scalar("_loss", loss.item(), step * NUM_PARAMETERS)
         pbar.set_postfix_str("loss: " + '{0:.2f}'.format(loss.item()))
         loss.backward()
@@ -90,10 +90,10 @@ def run(params: Params):
             writer.add_scalars("radial_flow_alpha", {f"layer_{i}":model.transforms[i].alpha for i in range(flow_length)}, step * NUM_PARAMETERS)
             writer.add_scalars("radial_flow_beta", {f"layer_{i}":model.transforms[i].beta for i in range(flow_length)}, step * NUM_PARAMETERS)
         if params.num_progress_images>0 and (step == NUM_STEPS - 1 or step % RECORD_EVERY == 0):
-            samples = model(torch.tensor([[1,1]])).sample((3000,)).detach()
+            samples = model(torch.tensor([[1]])).sample((3000,)).detach()
             # samples = model(torch.ones([3000,1])).sample((1,)).detach()
             samples = samples.view((3000,dims))
-            sns.kdeplot(x=samples[:,0].detach().numpy(), y=samples[:,1].detach().numpy(), cmap="Blues", shade=True)
+            sns.kdeplot(x=samples[:,0,0].detach().numpy(), y=samples[:,0,1].detach().numpy(), cmap="Blues", shade=True)
             writer.add_figure("density_plot", plt.gcf(), step * NUM_PARAMETERS)
     
     torch.save(model.state_dict(), f"runs/{params.name}/model.pt")
