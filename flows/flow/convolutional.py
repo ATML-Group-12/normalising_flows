@@ -4,17 +4,6 @@ from torch.distributions.transforms import Transform
 from pyro.distributions.torch_transform import TransformModule
 
 
-def circulant(tensor, dim):
-    """get a circulant version of the tensor along the {dim} dimension.
-
-    The additional axis is appended as the last dimension.
-    E.g. tensor=[0,1,2], dim=0 --> [[0,1,2],[2,0,1],[1,2,0]]"""
-
-    S = tensor.shape[dim]
-    tmp = torch.cat([tensor.flip((dim,)), torch.narrow(tensor.flip((dim,)), dim=dim, start=0, length=S-1)], dim=dim)
-    return tmp.unfold(dim, S, 1).flip((-1,))
-
-
 class CircularConvFlow(TransformModule):
     """
     Dimensional manipulation should not be done at the front as we need to have variable batch sizes.
@@ -28,7 +17,6 @@ class CircularConvFlow(TransformModule):
     def __init__(self, input_size: int) -> None:
         super().__init__()
         self.d = input_size
-        # w is the kernel which we keep in the forier space
         self.w = torch.nn.Parameter(torch.randn(self.d))
 
     def _call(self, x: torch.Tensor) -> torch.Tensor:
@@ -38,7 +26,6 @@ class CircularConvFlow(TransformModule):
 
         """
         return torch.fft.ifft(torch.mul(self.w, torch.fft.fft(x)))
-        # needs to work for shape (1, n, d) ?
 
     def log_abs_det_jacobian(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         """Using proposition 1c in the paper:
@@ -48,9 +35,8 @@ class CircularConvFlow(TransformModule):
             where w_f is the DFT of w
 
         """
-        w_f = self.w
 
-        value = torch.sum(torch.log(torch.abs(w_f))).item()
+        value = torch.sum(torch.log(torch.abs(self.w))).item()
 
         return torch.full((x.size(0),), value)  # Need to format this to correct shape of input x too
 
@@ -64,10 +50,8 @@ class CircularConvFlow(TransformModule):
             Then we return x which is the inverse DFT of x_f
 
         """
-
-        w_f = self.w
         y_f = torch.fft.fft(y)
-        x_f = torch.mul(torch.reciprocal(w_f), y_f)
+        x_f = torch.mul(torch.reciprocal(self.w), y_f)
 
         return torch.fft.ifft(x_f).real
 
