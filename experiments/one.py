@@ -38,6 +38,8 @@ class Params:
     momentum: float = 0.9
     num_progress_images: int = 20
     anomaly_detection: bool = False
+    count_by_param: bool = True
+    # whether "parameter update" means "parameter update" (True) or "epoch" (False)
 
 
 
@@ -69,10 +71,12 @@ def run(params: Params):
     print("Number of parameters:", NUM_PARAMETERS)
     writer = SummaryWriter(f"runs/{params.name}")
     # pathlib.Path(f"runs/{params.name}/images").mkdir(parents=True, exist_ok=True) 
-
-    NUM_STEPS = params.num_updates
+    if params.count_by_param:
+        NUM_STEPS = params.num_updates // NUM_PARAMETERS
+    else:
+        NUM_STEPS = params.num_updates
     RECORD_EVERY = int(np.ceil(NUM_STEPS / (params.num_progress_images-1))) if params.num_progress_images > 1 else NUM_STEPS+1
-    pbar = tqdm(range(NUM_STEPS))
+    pbar = tqdm(range(0,params.num_updates,(NUM_PARAMETERS if params.count_by_param else 1)))
     
     torch.autograd.set_detect_anomaly(params.anomaly_detection)
 
@@ -94,31 +98,36 @@ def run(params: Params):
         if isinstance(model.transforms[0], RadialFlow):
             writer.add_scalars("radial_flow_alpha", {f"layer_{i}":model.transforms[i].alpha for i in range(flow_length)}, step)
             writer.add_scalars("radial_flow_beta", {f"layer_{i}":model.transforms[i].beta for i in range(flow_length)}, step)
-        if params.num_progress_images>0 and (step == NUM_STEPS - 1 or step % RECORD_EVERY == 0):
-            samples = model(torch.tensor([[1,1]])).sample((3000,)).detach()
-            # samples = model(torch.ones([3000,1])).sample((1,)).detach()
-            samples = samples.view((3000,dims))
-            sns.kdeplot(x=samples[:,0].detach().numpy(), y=samples[:,1].detach().numpy(), cmap="Blues", shade=True)
-            writer.add_figure("density_plot", plt.gcf(), step)
+        if params.num_progress_images>0:
+            step_no = step // NUM_PARAMETERS if params.count_by_param else step
+            if (step_no == NUM_STEPS - 1 or step_no % RECORD_EVERY == 0):
+                samples = model(torch.tensor([[1,1]])).sample((3000,)).detach()
+                # samples = model(torch.ones([3000,1])).sample((1,)).detach()
+                samples = samples.view((3000,dims))
+                sns.kdeplot(x=samples[:,0].detach().numpy(), y=samples[:,1].detach().numpy(), cmap="Blues", shade=True)
+                writer.add_figure("density_plot", plt.gcf(), step)
     
     torch.save(model.state_dict(), f"runs/{params.name}/model.pt")
 
 if __name__ == "__main__":
     start_datetime = datetime.now().strftime("%Y%m%d-%H%M%S")
     energy_functions = {"u1": u1, "u2": u2, "u3": u3, "u4": u4}
-    # layer_types = {"radialflow": RadialFlow, "planarflow": PlanarFlow, "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
     layer_types = {"planarflow": PlanarFlow, "radialflow": RadialFlow, "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
     flow_lengths = [2, 8, 32]
     for function_name, function in energy_functions.items():
         for layer_name, layer_type in layer_types.items():
             for flow_length in flow_lengths:
-                params = Params(
-                    layer_type=layer_type,
-                    energy_function=function,
-                    flow_length=flow_length,
-                    name=f"{start_datetime}/{layer_name}-{function_name}-{str(flow_length)}",
-                )
-                print("Running", params.name)
-                run(params)
-                print("Done")
-                print("-" * 40)
+                try:
+                    params = Params(
+                        layer_type=layer_type,
+                        energy_function=function,
+                        flow_length=flow_length,
+                        name=f"{start_datetime}/{layer_name}-{function_name}-{str(flow_length)}",
+                    )
+                    print("Running", params.name)
+                    run(params)
+                    print("Done")
+                except Exception as e:
+                    print(e)
+                finally:
+                    print("-" * 40)
