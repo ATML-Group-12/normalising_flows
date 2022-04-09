@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from flows.loss.elbo import FlowELBO
+from flows.loss.kl import KLDivergence
 from flows.embedding.basic import Basic
 from flows.flow.planar import PlanarFlow
 from flows.flow.radial import RadialFlow
@@ -54,6 +55,7 @@ def get_elbo(params: Params):
     model.load_state_dict(torch.load(params.model_path))
     model.eval()
     return FlowELBO(params.energy_function, model(torch.tensor([[1,1]])), params.num_samples, 1e4+1)
+    # return KLDivergence(model(torch.tensor([[1,1]])), params.energy_function, params.num_samples)
 
 if __name__ == "__main__":
     energy_functions = {"u1": u1, "u2": u2, "u3": u3, "u4": u4}
@@ -63,11 +65,14 @@ if __name__ == "__main__":
     for layer_name, layer_type in layer_types.items():
         for function_name, function in energy_functions.items():
             for flow_length in flow_lengths:
+                model_path = f"runs/20220409-170004/{layer_name}-{function_name}-{str(flow_length)}/model.pt"
+                if not os.path.exists(model_path):
+                    continue
                 params = Params(
                     layer_type=layer_type,
                     energy_function=function,
                     flow_length=flow_length,
-                    model_path=f"runs/20220409-170004/{layer_name}-{function_name}-{str(flow_length)}/model.pt",
+                    model_path=model_path,
                 )
                 print("Running", params.model_path, end="...")
                 try:
@@ -79,7 +84,7 @@ if __name__ == "__main__":
                         "elbo": elbo.item()
                     }]))
                     print("Done")
-                except:
+                except FileNotFoundError:
                     print("Failed")
     elbos = pd.concat(elbos,ignore_index=True)
     elbos.to_csv(os.path.join(CWD,"elbos.csv"))
