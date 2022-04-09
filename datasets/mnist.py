@@ -11,7 +11,7 @@ class BinarisedMNIST(torch.utils.data.Dataset):
         self.download = download
 
         if self.train:
-            self.train_data = torchvision.datasets.MNIST(
+            self.data = torchvision.datasets.MNIST(
                 self.root,
                 train=True,
                 download=self.download,
@@ -21,7 +21,7 @@ class BinarisedMNIST(torch.utils.data.Dataset):
                 ])
             )
         else:
-            self.test_data = torchvision.datasets.MNIST(
+            self.data = torchvision.datasets.MNIST(
                 self.root,
                 train=False,
                 download=self.download,
@@ -32,10 +32,7 @@ class BinarisedMNIST(torch.utils.data.Dataset):
             )
 
     def __getitem__(self, index):
-        if self.train:
-            img, target = self.train_data[index]
-        else:
-            img, target = self.test_data[index]
+        img, target = self.data[index]
 
         if self.transform is not None:
             img = self.transform(img)
@@ -46,7 +43,4 @@ class BinarisedMNIST(torch.utils.data.Dataset):
         return img, target
 
     def __len__(self):
-        if self.train:
-            return len(self.train_data)
-        else:
-            return len(self.test_data)
+        return len(self.data)

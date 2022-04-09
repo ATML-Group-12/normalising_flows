@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from torch.distributions import constraints
 from torch.distributions.transforms import Transform
+from pyro.distributions.torch_transform import TransformModule
 
 class _ReLUInnerNetwork(nn.Module):
 
@@ -22,7 +23,7 @@ class _ReLUInnerNetwork(nn.Module):
 
 
 
-class NiceBase(nn.Module, Transform):
+class NiceBase(TransformModule):
 
     def __init__(self, input_dim: int, front_dim: int, network_num_layers: int, network_latent_dim: int) -> None:
         super(NiceBase, self).__init__()
