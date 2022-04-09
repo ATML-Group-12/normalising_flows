@@ -3,3 +3,4 @@
 runs/*
 cloudflared*
 data/*
+experiments/plots/*.png
