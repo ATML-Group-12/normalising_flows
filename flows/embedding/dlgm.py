@@ -40,7 +40,11 @@ class DLGM(nn.Module):
         super().__init__()
         self.input_dim = input_dim
         self.fc1 = nn.Linear(z_dim, hidden_dim)
-        self.fc21 = nn.Linear(hidden_dim, self.input_dim * (1 if binary else 2))
+        if binary:
+            self.fc21 = nn.Linear(hidden_dim, self.input_dim)
+        else:
+            self.fc21 = nn.Linear(hidden_dim, self.input_dim-1)
+            self.fc22 = nn.Linear(hidden_dim, self.input_dim-1)
         self.softplus = nn.Softplus()
         self.sigmoid = nn.Sigmoid()
         self.binary = binary
@@ -51,8 +55,8 @@ class DLGM(nn.Module):
             loc_img = self.sigmoid(self.fc21(hidden))
             return loc_img
         else:
-            out = self.sigmoid(self.fc21(hidden))
-            loc_img, scale_img = out[..., :self.input_dim], out[..., self.input_dim:]
+            loc_img = self.sigmoid(self.fc21(hidden))
+            scale_img = self.softplus(self.fc22(hidden))
             return loc_img, scale_img
 
 
@@ -117,5 +121,8 @@ class VAE(nn.Module):
     def reconstruct_img(self, x):
         out_dist = self.encoder(x)
         z = out_dist.sample()
-        loc_img = self.decoder(z)
+        if self.binary:
+            loc_img = self.decoder(z)
+        else:
+            loc_img, _ = self.decoder(z)
         return loc_img
