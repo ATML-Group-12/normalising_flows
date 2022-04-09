@@ -25,7 +25,6 @@ import pathlib
 from datetime import datetime
 
 
-
 @dataclass
 class Params:
     layer_type: Callable[..., TransformModule]
@@ -37,7 +36,8 @@ class Params:
     num_updates: int = 500000
     lr: float = 1e-5
     momentum: float = 0.9
-    num_progress_images: int = 5
+    num_progress_images: int = 20
+    anomaly_detection: bool = False
 
 
 
@@ -70,38 +70,44 @@ def run(params: Params):
     writer = SummaryWriter(f"runs/{params.name}")
     # pathlib.Path(f"runs/{params.name}/images").mkdir(parents=True, exist_ok=True) 
 
-    NUM_STEPS = int(np.ceil(params.num_updates / NUM_PARAMETERS))
+    NUM_STEPS = params.num_updates
     RECORD_EVERY = int(np.ceil(NUM_STEPS / (params.num_progress_images-1))) if params.num_progress_images > 1 else NUM_STEPS+1
     pbar = tqdm(range(NUM_STEPS))
+    
+    torch.autograd.set_detect_anomaly(params.anomaly_detection)
+
     for step in pbar:
         optimizer.zero_grad()
         loss = FlowELBO(params.energy_function, model(torch.tensor([[1,1]])), num_samples=100, epoch=step)
-        writer.add_scalar("_loss", loss.item(), step * NUM_PARAMETERS)
+        writer.add_scalar("_loss", loss.item(), step)
         pbar.set_postfix_str("loss: " + '{0:.2f}'.format(loss.item()))
         loss.backward()
         optimizer.step()
-        writer.add_scalar("embedding_covariance_determinant", torch.det(model.embedding.cov).item(), step * NUM_PARAMETERS)
-        writer.add_scalar("embedding_mean_magnitude", torch.norm(torch.abs(model.embedding.mean)).item(), step * NUM_PARAMETERS)
+
+        writer.add_scalar("embedding_covariance_determinant", torch.det(model.embedding.cov).item(), step)
+        writer.add_scalar("embedding_mean_magnitude", torch.norm(torch.abs(model.embedding.mean)).item(), step)
+        writer.add_scalar("embedding_mean_grad_magnitude", torch.norm(torch.abs(model.embedding.mean.grad)).item(), step)
         transformed_mean = model.embedding.mean.unsqueeze(0)
         for t in model.transforms:
             transformed_mean = t(transformed_mean)
-        writer.add_scalar("transformed_mean_magnitude", torch.norm(torch.abs(transformed_mean)).item(), step * NUM_PARAMETERS)
+        writer.add_scalar("transformed_mean_magnitude", torch.norm(torch.abs(transformed_mean)).item(), step)
         if isinstance(model.transforms[0], RadialFlow):
-            writer.add_scalars("radial_flow_alpha", {f"layer_{i}":model.transforms[i].alpha for i in range(flow_length)}, step * NUM_PARAMETERS)
-            writer.add_scalars("radial_flow_beta", {f"layer_{i}":model.transforms[i].beta for i in range(flow_length)}, step * NUM_PARAMETERS)
+            writer.add_scalars("radial_flow_alpha", {f"layer_{i}":model.transforms[i].alpha for i in range(flow_length)}, step)
+            writer.add_scalars("radial_flow_beta", {f"layer_{i}":model.transforms[i].beta for i in range(flow_length)}, step)
         if params.num_progress_images>0 and (step == NUM_STEPS - 1 or step % RECORD_EVERY == 0):
             samples = model(torch.tensor([[1,1]])).sample((3000,)).detach()
             # samples = model(torch.ones([3000,1])).sample((1,)).detach()
             samples = samples.view((3000,dims))
             sns.kdeplot(x=samples[:,0].detach().numpy(), y=samples[:,1].detach().numpy(), cmap="Blues", shade=True)
-            writer.add_figure("density_plot", plt.gcf(), step * NUM_PARAMETERS)
+            writer.add_figure("density_plot", plt.gcf(), step)
     
     torch.save(model.state_dict(), f"runs/{params.name}/model.pt")
 
 if __name__ == "__main__":
     start_datetime = datetime.now().strftime("%Y%m%d-%H%M%S")
     energy_functions = {"u1": u1, "u2": u2, "u3": u3, "u4": u4}
-    layer_types = {"radialflow": RadialFlow, "planarflow": PlanarFlow, "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
+    # layer_types = {"radialflow": RadialFlow, "planarflow": PlanarFlow, "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
+    layer_types = {"planarflow": PlanarFlow, "radialflow": RadialFlow, "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
     flow_lengths = [2, 8, 32]
     for function_name, function in energy_functions.items():
         for layer_name, layer_type in layer_types.items():
@@ -110,7 +116,7 @@ if __name__ == "__main__":
                     layer_type=layer_type,
                     energy_function=function,
                     flow_length=flow_length,
-                    name=f"{start_datetime}/{layer_name}-{function_name}-{str(flow_length)}"
+                    name=f"{start_datetime}/{layer_name}-{function_name}-{str(flow_length)}",
                 )
                 print("Running", params.name)
                 run(params)

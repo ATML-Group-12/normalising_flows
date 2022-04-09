@@ -15,18 +15,14 @@ class NicePermutation(NiceBase):
         super(NicePermutation, self).__init__(input_dim, front_dim, network_num_layers, network_latent_dim)
         perm = torch.randperm(self.input_dim)
         inverse_perm = inverse_permutation(perm)
-        perm = torch.eye(self.input_dim)[perm]
-        inverse_perm = torch.eye(self.input_dim)[inverse_perm]
-        self.perm = lambda x: x @ perm
-        self.inverse_perm = lambda x: x @ inverse_perm
-        # reimplemented to follow style of nice_ortho
-        # ensure guarantee it doesn't accidentally change the perm matrix
+        self.perm = torch.eye(self.input_dim)[perm]
+        self.inverse_perm = torch.eye(self.input_dim)[inverse_perm]
 
     def mix(self, x: torch.Tensor) -> torch.Tensor:
-        return self.perm(x)
+        return x @ self.perm
 
     def unmix(self, x: torch.Tensor) -> torch.Tensor:
-        return self.inverse_perm(x)
+        return x @ self.inverse_perm
 
 if __name__ == "__main__":
     from flows.embedding.basic import Basic
