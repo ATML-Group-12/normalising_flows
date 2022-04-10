@@ -4,3 +4,8 @@ runs/*
 cloudflared*
 data/*
 experiments/plots/*.png
+
+report/*
+!report/*.tex
+!report/*.pdf
+!report/*.png
