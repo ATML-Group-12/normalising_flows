@@ -1,0 +1,11 @@
+\begin{thebibliography}{1}
+
+\bibitem{flows}
+Danilo~Jimenez Rezende and Shakir Mohamed.
+\newblock Variational inference with normalizing flows, 2015.
+
+\bibitem{nice}
+Laurent Dinh, David Krueger, and Yoshua Bengio.
+\newblock Nice: Non-linear independent components estimation, 2014.
+
+\end{thebibliography}
