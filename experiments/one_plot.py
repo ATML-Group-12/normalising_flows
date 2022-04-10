@@ -15,6 +15,7 @@ from flows.flow.radial import RadialFlow
 from flows.model.model import FlowModel
 from nice.layer.nice_ortho import NiceOrthogonal
 from nice.layer.nice_perm import NicePermutation
+from nice.layer.diag_scale import DiagonalScaling
 from nice.model.model import NiceModel
 from pyro.distributions.torch_transform import TransformModule
 from torch.distributions import TransformedDistribution
@@ -64,21 +65,24 @@ def plot_intermediates(params: Params):
         )
     elif "nice" in params.model_path:
         transforms = [params.layer_type(dims, dims//2, 4, dims) for _ in range(k)]
+        if "diag" in params.model_path:
+            transforms.append(DiagonalScaling(dims))
         model = NiceModel(
             embedding=embedding,
             transforms=transforms
         )
     model.load_state_dict(torch.load(params.model_path))
     model.eval()
-    fig,ax = plt.subplots(1,k+2,figsize=(10*(k+2),10))
+    NUM_PLOTS = len(model.transforms) + 2
+    fig,ax = plt.subplots(1,NUM_PLOTS,figsize=(10*NUM_PLOTS,10))
     fig.tight_layout()
     dist = model.embedding(torch.tensor([[1,1]]))
-    pbar = tqdm(range(k+1))
+    pbar = tqdm(range(NUM_PLOTS))
     for i,t in enumerate(model.transforms):
         plot_distribution(dist, num_samples=params.num_samples, ax=ax[i])
         dist = TransformedDistribution(dist, t)
         pbar.update(1)
-    plot_distribution(dist, num_samples=params.num_samples, ax=ax[k])
+    plot_distribution(dist, num_samples=params.num_samples, ax=ax[-2])
     pbar.update(1)
 
     size = 5
@@ -87,25 +91,31 @@ def plot_intermediates(params: Params):
     wi = torch.Tensor(np.vstack([xi.flatten(), yi.flatten()]))
     zi = params.energy_function(wi).detach().numpy()
     ax[-1].pcolormesh(xi, yi, zi.reshape(xi.shape), shading='auto', cmap='turbo')
+    pbar.update(1)
     # fig.colorbar()
     plt.savefig(os.path.join(CWD,"plots",f"{params.plot_name}.png"))
     plt.close()
 
 if __name__ == "__main__":
     energy_functions = {"u1": u1, "u2": u2, "u3": u3, "u4": u4}
-    layer_types = {"radialflow": RadialFlow, "planarflow": PlanarFlow, "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
+    layer_types = {
+        "radialflow": RadialFlow, "planarflow": PlanarFlow,
+        "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation,
+        "niceorthogonaldiag": NiceOrthogonal, "nicepermutationdiag": NicePermutation,
+    }
     flow_lengths = [2, 8]
     elbos = []
     for layer_name, layer_type in layer_types.items():
         for function_name, function in energy_functions.items():
             for flow_length in flow_lengths:
-                if not os.path.exists(f"runs/20220409-170004/{layer_name}-{function_name}-{str(flow_length)}/model.pt"):
+                model_path = f"runs/20220410-122643/{layer_name}-{function_name}-{str(flow_length)}/model.pt"
+                if not os.path.exists(model_path):
                     continue
                 params = Params(
                     layer_type=layer_type,
                     energy_function=function,
                     flow_length=flow_length,
-                    model_path=f"runs/20220409-170004/{layer_name}-{function_name}-{str(flow_length)}/model.pt",
+                    model_path=model_path,
                     plot_name=f"{layer_name}-{function_name}-{str(flow_length)}",
                 )
                 print("Running", params.model_path)
