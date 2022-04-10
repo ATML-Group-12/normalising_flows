@@ -72,12 +72,11 @@ class NiceBase(TransformModule):
         return self._call(x)
 
     def _inverse(self, z: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            x_front = z[:, :self.front_dim]
-            x_back = x_front.clone()
-            x_back = self.decoupling_law(z[:, self.front_dim:], self.m(x_back))
-            x = torch.cat([x_front, x_back], dim=1)
-            x = self.unmix(x)
+        x_front = z[:, :self.front_dim]
+        x_back = x_front.clone()
+        x_back = self.decoupling_law(z[:, self.front_dim:], self.m(x_back))
+        x = torch.cat([x_front, x_back], dim=-1)
+        x = self.unmix(x)
         return x
     
     @property
