@@ -16,12 +16,7 @@ The goal of both of the above is to provide a transformation to the original den
 
 % In addition to the practical implementation and the experiments, the paper gives proof that infinitesimal flows, which are normalizing flows whose length tends to infinity, can define a class of posteriors that is asymptotically able to recover the true posterior distribution, solving therefore one of the most important problems of variational inference. This is another good indicator that the method should perform well in the finite case.
 
-
-- TODO: describe in more depth, after we have results
-
 The paper’s experiments on the binarized MNIST dataset aim to demonstrate how variational inference with normalizing flows can outperform previous methods, compare the performance of different types of flows, and discuss the relation between the length of the flow and the quality of the resulting approximation.
-
-- TODO: after we finish the extension
 
 In our report, we replicate the original contributions of the paper by running the same experiments on MNIST. Additionally, we consider another class of flows, that of invertible convolution flows, which use the properties of circulant matrices to achieve efficient computation of the log-determinant. 
 
