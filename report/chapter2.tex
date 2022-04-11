@@ -1,6 +1,14 @@
-\section{NICE}
+\chapter{Experiments \& Results}
 
-Using the idea of flows, the authors view the coupling layers in the NICE paper as a flow. A coupling layer $f$ is a neural network layer with easy to compute inverse and a trivial Jacobian. For an input vector $\mathbf{z} \in \mathbb{R}^D$, we have
+We detail the experiments from the paper, our implementation, and the results.
+
+\section{Experiments}
+
+The paper included two experiments. The first was to assess the representative power of normalizing flows, where the models were asked to fit 4 different 2D distributions with unnormallized densities $p(x) \propto exp(-U(x))$
+
+\subsection{NICE}
+
+Using the idea of flows, the authors reviewed other work in the field as flows. One of the main comparisons was the coupling layers in the NICE. A coupling layer $f$ is a neural network layer with easy to compute inverse and a trivial Jacobian. For an input vector $\mathbf{z} \in \mathbb{R}^D$, we have
 \begin{equation}
 f(\mathbf{z}) = (\mathbf{z}_A, g(\mathbf{z}_B,h(\mathbf{z}_A))) 
 \end{equation}
@@ -9,6 +17,12 @@ f^{-1}(\mathbf{z}) = (\mathbf{z}_A, g^{-1}(\mathbf{z}_B,h(\mathbf{z}_A)))
 \end{equation}
 
 where $(A,B)$ is a partition of $\{1,2,\dots,D\}$, $h$ is an arbitrary function with input size $|A|$, and $g$ is a coupling law, a function that is invertible for the first argument given the second. In the paper, $h$ is a neural network and $g(a,b)=a+b$, so the Jacobian is just the identity matrix. Since the determinant of the Jacobian is 1, the authors of (variation paper) classify it as a volume-preserving flow.
-The authors of the NICE paper \cite{nice} do point out this issue, and introduce a diagonal scaling layer as the last layer of their models. This approach was not used in the original paper. Moreover, the authors introduced variants NICE-ortho and NICE-perm instead of the original directly, where random orthogonal and permutation matrices are applied to $\mathbf{z}$ before the partition. 
+The authors of the NICE do point out this issue, and introduce a diagonal scaling layer as the last layer of their models. This was not mentioned in the original paper. Moreover, the authors introduced variants NICE-ortho and NICE-perm instead of the original directly, where random orthogonal and permutation matrices are applied to $\mathbf{z}$ before the partition. 
+
+
+
+\section{Implementation}
 
 We note that the authors of the original paper have not made the choice of $h$ clear in the experiments. For the replicating experiment 6.1, we have chosen $h$ to be a ReLU network of 4 layers with hidden dimensions of 2.
+
+\section{Results}

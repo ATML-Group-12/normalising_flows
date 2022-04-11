@@ -9,3 +9,7 @@ report/*
 !report/*.tex
 !report/*.pdf
 !report/*.png
+poster/*
+!poster/*.tex
+!poster/*.pdf
+!poster/*.png
