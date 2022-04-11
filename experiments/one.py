@@ -14,6 +14,7 @@ from flows.flow.radial import RadialFlow
 from flows.model.model import FlowModel
 from nice.layer.nice_ortho import NiceOrthogonal
 from nice.layer.nice_perm import NicePermutation
+from nice.layer.diag_scale import DiagonalScaling
 from nice.model.model import NiceModel
 from flows.loss.elbo import FlowELBO
 from experiments.test_functions import u1, u2, u3, u4
@@ -58,6 +59,8 @@ def run(params: Params):
         )
     elif "nice" in params.name:
         transforms = [params.layer_type(dims, dims//2, 4, dims) for _ in range(k)]
+        if "diag" in params.name:
+            transforms.append(DiagonalScaling(dims))
         model = NiceModel(
             embedding=embedding,
             transforms=transforms
@@ -112,7 +115,11 @@ def run(params: Params):
 if __name__ == "__main__":
     start_datetime = datetime.now().strftime("%Y%m%d-%H%M%S")
     energy_functions = {"u1": u1, "u2": u2, "u3": u3, "u4": u4}
-    layer_types = {"planarflow": PlanarFlow, "radialflow": RadialFlow, "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
+    layer_types = {
+        "niceorthogonaldiag": NiceOrthogonal, "nicepermutationdiag": NicePermutation,
+        "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation,
+        "planarflow": PlanarFlow, "radialflow": RadialFlow,
+    }
     flow_lengths = [2, 8, 32]
     for function_name, function in energy_functions.items():
         for layer_name, layer_type in layer_types.items():
@@ -123,6 +130,8 @@ if __name__ == "__main__":
                         energy_function=function,
                         flow_length=flow_length,
                         name=f"{start_datetime}/{layer_name}-{function_name}-{str(flow_length)}",
+                        num_updates=5000,
+                        count_by_param=False,
                     )
                     print("Running", params.name)
                     run(params)
