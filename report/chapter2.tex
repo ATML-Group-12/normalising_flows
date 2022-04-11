@@ -1,12 +1,12 @@
-\chapter{Experiments}
-
-\section*{NICE}
+\section{NICE}
 
 Using the idea of flows, the authors view the coupling layers in the NICE paper as a flow. A coupling layer $f$ is a neural network layer with easy to compute inverse and a trivial Jacobian. For an input vector $\mathbf{z} \in \mathbb{R}^D$, we have
-\begin{align*}
-    f(\mathbf{z}) &= (\mathbf{z}_A, g(\mathbf{z}_B,h(\mathbf{z}_A)))\\
-    f^{-1}(\mathbf{z}) &= (\mathbf{z}_A, g^{-1}(\mathbf{z}_B,h(\mathbf{z}_A)))
-\end{align*}
+\begin{equation}
+f(\mathbf{z}) = (\mathbf{z}_A, g(\mathbf{z}_B,h(\mathbf{z}_A))) 
+\end{equation}
+\begin{equation}
+f^{-1}(\mathbf{z}) = (\mathbf{z}_A, g^{-1}(\mathbf{z}_B,h(\mathbf{z}_A)))
+\end{equation}
 
 where $(A,B)$ is a partition of $\{1,2,\dots,D\}$, $h$ is an arbitrary function with input size $|A|$, and $g$ is a coupling law, a function that is invertible for the first argument given the second. In the paper, $h$ is a neural network and $g(a,b)=a+b$, so the Jacobian is just the identity matrix. Since the determinant of the Jacobian is 1, the authors of (variation paper) classify it as a volume-preserving flow.
 The authors of the NICE paper do point out this issue, and introduce a diagonal scaling layer as the last layer of their models. This approach was not used in the original paper. Moreover, the authors introduced variants NICE-ortho and NICE-perm instead of the original directly, where random orthogonal and permutation matrices are applied to $\mathbf{z}$ before the partition. 
