@@ -30,7 +30,7 @@ class DiagonalScaling(TransformModule):
         return self._inverse
 
     def _inverse(self, y):
-        return y * -self.log_factors.exp()
+        return y * (-self.log_factors).exp()
     
     def log_abs_det_jacobian(self, x, y):
         return torch.abs(torch.sum(self.log_factors, dim=-1)) * torch.ones(x.shape[:-1])
