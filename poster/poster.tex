@@ -107,15 +107,16 @@
     \end{block}
 
     \begin{block}{Theoretical Background}
-          \begin{itemize}
-          	\item \textbf{TODO!!!}
-          	\item Focus on theory between NFs here, specifically Linear NFs and NICE
-          	\item ELBO
-          	\item Stochastic Backpropagation
-          	\item Deep Latent Gaussian Models
-          	\item Flows
-          	\item Non-Linear Independent Components Estimation
-      \end{itemize}
+    \textbf{Normalizing flows} are sequences of invertible, smooth mappings $f:\mathbb{R}^d\rightarrow \mathbb{R}^d$. We define a flow of length $K$ to be $K$ such transformations as follows:
+    \[ \mathbf{z_K} = f_K \circ ... \circ f_2 \circ f_1 (\mathbf{z_0}) \] 
+    where $\mathbf{z_0}$ is a random variable that has a simple initial distribution, and $\mathbf{z_K}$ is the corresponding random variable after applying the transformations.
+    
+    The properties of normalizing flows allow us to calculate the log-density of $\mathbf{z_K}$ efficiently, using the change of variable theorem:
+    \[ \ln q_K(\mathbf{z_K}) = \ln q_0(\mathbf{z_0}) - \sum_{k=1}^{K} \ln \left| \det \frac{\partial f_k}{\partial \mathbf{z_{k-1}}} \right| \]
+    The normalizing flow is defined as the path of the successive distributions $q_K$.
+    
+    The first class of flows that we use in our experiments is that of linear flows. More specifically, we consider \textbf{planar} and \textbf{radial} flows, which perform series of contractions and expansions in the direction perpendicular to a fixed hyperplane and around a reference point respectively.
+          
     \end{block}
   \end{column} % End of the 1st column
 
