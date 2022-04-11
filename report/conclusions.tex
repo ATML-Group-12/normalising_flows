@@ -1,5 +1,23 @@
 \chapter{Conclusion}
 
-TODO: Conclusion \\
-- critical evaluation of our work \\
-- what we could've done with more time/resources
+\section{Further Extensions}
+Time constraints, in combination with the limited computational resources we possessed, forced us to focus this project on a single extension, that of circular convolution flows.  However, in our reading prior to completing the project, we came across a variety of other directions in which we could extend the paper's results. What follows is a summary of some of these ideas, grouped by the part of the paper which they would have to modify.
+
+\subsection{Different Types of Flows}
+In our project we considered the two different types of linear flows in section 2.3, as well as NICE in section 2.4. However, there has been lots of ongoing research on flows in recent years, so a possible extension would be to experiment with these and compare the results to the ones from the paper.
+
+\subsubsection{Infinitesimal (Continuous) Flows}
+To begin with, one can consider what happens if we allow for the length of the flows to tend to infinity. Such flows are called infinitesimal flows. Even though they are mentioned in \cite{main}, there is no related experiment discussed, and they serve mostly as a theoretical guarantee for the correctness of the normalizing flows framework. However, these can be modeled as partial differential equations and studied in more depth (see \cite{inf_flows}).
+
+\subsubsection{Autoregressive Flows}
+Another emerging category of flows is that of autoregressive flows \cite{autoregressive}, where each dimension of a vector variable is being conditioned on the previous dimensions.  Some instances of autoregressive flows in literature are Masked Autoregressive Flows (MAF)\cite{maf} and Inverse Autoregressive Flows (IAF) \cite{autoregressive}.
+
+%\subsubsection{Residual Flows}
+%Finally, there is the idea of residual flows \cite{chen}, which are based on residual networks \cite{he}
+
+\subsection{Additional Datasets}
+The paper provided comparison and extensive experimenting only on the MNIST dataset, so an obvious extension would be to use different datasets. CIFAR-10 is already discussed in the paper, so given more computational resources we would have liked to build models on that and compared them. Having completed this, it would also make sense to proceed with more complex image datasets of higher data dimensionality,  such as ImageNet32 and ImageNet64.
+
+
+\subsection{Alternatives to the loss function}
+Finally, we could have trained our models with different loss functions. Most work has been done in loss functions optimized by minimization of the Kullback-Leibler divergence, similarly what we did in this report. However, there is work on different approaches, see \cite{flow_gan} and \cite{wass}.
