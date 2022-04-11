@@ -7,7 +7,19 @@ import pyro.distributions as dist
 
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.transforms import ComposeTransformModule
+from flows.utils import MaxoutLayer
 
+class MaxOut(nn.Module):
+    def __init__(self, input_size: int, window_size: int):
+        super().__init__()
+        self.input_size = input_size
+        self.window_size = window_size
+
+    def forward(self, x):
+        all_but_last = x.size()[:-1]
+        u = x.view(*all_but_last, self.input_size // self.window_size, self.window_size)
+        u, _ = torch.max(u, dim=-1)
+        return u
 
 class InferenceNetwork(nn.Module):
     """
@@ -19,13 +31,14 @@ class InferenceNetwork(nn.Module):
         super().__init__()
         self.input_dim = input_dim
         self.fc1 = nn.Linear(self.input_dim, hidden_dim)
-        self.fc21 = nn.Linear(hidden_dim, z_dim)
-        self.fc22 = nn.Linear(hidden_dim, z_dim)
-        self.softplus = nn.Softplus()
+        self.fc21 = nn.Linear(hidden_dim // 4, z_dim)
+        self.fc22 = nn.Linear(hidden_dim // 4, z_dim)
+        self.activation = MaxOut(hidden_dim, 4)
+
 
     def forward(self, x) -> dist.Distribution:
         x = x.reshape(-1, self.input_dim)
-        hidden = self.softplus(self.fc1(x))
+        hidden = self.activation(self.fc1(x))
         z_loc = self.fc21(hidden)
         z_scale = torch.exp(self.fc22(hidden))
         return dist.Normal(z_loc, z_scale)
@@ -40,7 +53,11 @@ class DLGM(nn.Module):
         super().__init__()
         self.input_dim = input_dim
         self.fc1 = nn.Linear(z_dim, hidden_dim)
-        self.fc21 = nn.Linear(hidden_dim, self.input_dim * (1 if binary else 2))
+        if binary:
+            self.fc21 = nn.Linear(hidden_dim, self.input_dim)
+        else:
+            self.fc21 = nn.Linear(hidden_dim, self.input_dim-1)
+            self.fc22 = nn.Linear(hidden_dim, self.input_dim-1)
         self.softplus = nn.Softplus()
         self.sigmoid = nn.Sigmoid()
         self.binary = binary
@@ -51,8 +68,8 @@ class DLGM(nn.Module):
             loc_img = self.sigmoid(self.fc21(hidden))
             return loc_img
         else:
-            out = self.sigmoid(self.fc21(hidden))
-            loc_img, scale_img = out[..., :self.input_dim], out[..., self.input_dim:]
+            loc_img = self.sigmoid(self.fc21(hidden))
+            scale_img = self.softplus(self.fc22(hidden))
             return loc_img, scale_img
 
 
@@ -83,11 +100,14 @@ class VAE(nn.Module):
         self.transformation = ComposeTransformModule(transformation)
         if use_cuda:
             self.cuda()
+            self.transformation = self.transformation.cuda()
+            self.encoder = self.encoder.cuda()
+            self.decoder = self.decoder.cuda()
         self.use_cuda = use_cuda
         self.z_dim = z_dim
         self.binary = binary
 
-    def model(self, x):
+    def model(self, x, annealing_factor=1.0):
         pyro.module("decoder", self.decoder)
         pyro.module("transformation", self.transformation)
         with pyro.plate("x", x.shape[0]):
@@ -95,8 +115,8 @@ class VAE(nn.Module):
             z_scale = x.new_ones(torch.Size((self.z_dim,)))
             base_dist = dist.Normal(z_loc, z_scale)
             transformed_dist = dist.TransformedDistribution(base_dist, self.transformation)
-
-            z = pyro.sample("latent", transformed_dist)
+            with pyro.poutine.scale(None, scale=annealing_factor):
+                z = pyro.sample("latent", transformed_dist)
             if self.binary:
                 loc_img = self.decoder(self.transformation.inv(z))
                 pyro.sample("obs", dist.Bernoulli(loc_img).to_event(1), obs=x.reshape(-1, self.input_dim))
@@ -106,16 +126,21 @@ class VAE(nn.Module):
                 loc_img, scale_img = self.decoder(self.transformation.inv(z))
                 pyro.sample("obs", dist.LogisticNormal(loc_img, scale_img).to_event(1), obs=x.reshape(-1, self.input_dim))
 
-    def guide(self, x):
+    def guide(self, x, annealing_factor=1.0):
         pyro.module("encoder", self.encoder)
         pyro.module("transformation", self.transformation)
         with pyro.plate("x", x.shape[0]):
             out_dist = self.encoder(x)
             transformed_dist = dist.TransformedDistribution(out_dist, self.transformation)
-            pyro.sample("latent", transformed_dist)
+            with pyro.poutine.scale(None, scale=annealing_factor):
+                pyro.sample("latent", transformed_dist)
 
     def reconstruct_img(self, x):
         out_dist = self.encoder(x)
         z = out_dist.sample()
-        loc_img = self.decoder(z)
+        if self.binary:
+            loc_img = self.decoder(z)
+        else:
+            raise NotImplementedError
+            # loc_img, _ = self.decoder(z)
         return loc_img
