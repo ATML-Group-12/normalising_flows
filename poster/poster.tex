@@ -130,7 +130,7 @@
   \begin{column}{.3\textwidth} % 2nd column
     \vspace{\shrink}
     \begin{block}{Theoretical Background}
-      The authors compare their work with NICE, which introduces coupling layers. A coupling layer $f$ is a neural network layer with easy to compute inverse and a trivial Jacobian. For an input vector $\mathbf{z} \in \mathbb{R}^D$, we have
+      The authors compare their work with \textbf{NICE}, which introduces coupling layers. A coupling layer $f$ is a neural network layer with easy to compute inverse and a trivial Jacobian. For an input vector $\mathbf{z} \in \mathbb{R}^D$, we have
 \begin{equation}
 f(\mathbf{z}) = (\mathbf{z}_A, g(\mathbf{z}_B,h(\mathbf{z}_A))) 
 \end{equation}
@@ -148,6 +148,11 @@ where $(A,B)$ is a partition of $\{1,2,\dots,D\}$, $h$ is a neural network with 
       
       \begin{center}
 	\includegraphics[width=0.9\columnwidth]{EFs-ours}
+      \end{center}
+      
+      	\begin{center}
+        \includegraphics[width=0.5\columnwidth]{circular_conv_test_loss.png}\\
+        \textit{Figure: Test Loss over 5000 epochs using Circular Convolutional Flows}
       \end{center}
       
       
@@ -187,10 +192,7 @@ where $(A,B)$ is a partition of $\{1,2,\dots,D\}$, $h$ is a neural network with 
 	
 	\end{block}
 	
-	\begin{center}
-        \includegraphics[width=0.5\columnwidth]{circular_conv_test_loss.png}\\
-        \textit{Figure: Test Loss over 5000 epochs using Circular Convolutional Flows}
-      \end{center}
+
 
     \begin{block}{References}
       \nocite{*} % Insert publications even if they are not cited in the poster
