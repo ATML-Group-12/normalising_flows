@@ -88,10 +88,10 @@
     \vspace{\shrink}          
     \begin{block}{Introduction}
       \begin{itemize}
-          \item True posterior distributions of inference tasks is in most cases an intractable problem.
+          \item Calculating the true posterior distribution of inference tasks is in most cases an intractable problem.
           \item Lots of research on approaches for efficient approximation of the posterior, however the resulting classes prove to be of limited expressiveness.
           \item The authors in \cite{flows} introduce the notion of normalizing flows, sequences of invertible transformations applied to a simple initial density, to efficiently create more expressive families of candidate posteriors to be used for variational inference.
-          \item We compare the performance of different types of flows on the MNIST dataset.
+          \item We compare the performance of different types of normalizing flows on the MNIST dataset.
       \end{itemize}
 
 
@@ -99,7 +99,7 @@
 
     \begin{block}{Our Work}
       \begin{itemize}
-          \item Reproduced experiment on MNIST using Normalizing Flows
+          \item Reproduced experiment on MNIST using Linear Normalizing Flows
           \item Reproduced experiment on MNIST using NICE
           \item Extended the ideas of the paper and experimented with Invertible Convolutional Flows
           \item Created open-source Github repository with code and results: \url{github.com/ATML-Group-12/normalising_flows} 
