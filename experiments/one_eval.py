@@ -119,7 +119,7 @@ if __name__ == "__main__":
                 data=data, ax=ax)
             labels.append(pargs["label"])
         box = ax.get_position()
-        ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+        ax.set_position([box.x0, box.y0, box.width * 0.75, box.height])
         ax.legend(loc='center left', bbox_to_anchor=(1, 0.5),title="Architecture", labels=labels)
         plt.xlabel("Flow Length")
         plt.ylabel("Variational Bound (nat)")

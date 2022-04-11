@@ -4,7 +4,7 @@ runs/*
 cloudflared*
 data/*
 experiments/plots/*.png
-
+*.DS_Store
 report/*
 !report/*.tex
 !report/*.pdf
