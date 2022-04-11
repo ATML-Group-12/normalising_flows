@@ -7,7 +7,7 @@ import pyro.distributions as dist
 
 from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.transforms import ComposeTransformModule
-
+from flows.utils import MaxoutLayer
 
 class MaxOut(nn.Module):
     def __init__(self, input_size: int, window_size: int):
@@ -107,7 +107,7 @@ class VAE(nn.Module):
         self.z_dim = z_dim
         self.binary = binary
 
-    def model(self, x):
+    def model(self, x, annealing_factor=1.0):
         pyro.module("decoder", self.decoder)
         pyro.module("transformation", self.transformation)
         with pyro.plate("x", x.shape[0]):
@@ -115,8 +115,8 @@ class VAE(nn.Module):
             z_scale = x.new_ones(torch.Size((self.z_dim,)))
             base_dist = dist.Normal(z_loc, z_scale)
             transformed_dist = dist.TransformedDistribution(base_dist, self.transformation)
-
-            z = pyro.sample("latent", transformed_dist)
+            with pyro.poutine.scale(None, scale=annealing_factor):
+                z = pyro.sample("latent", transformed_dist)
             if self.binary:
                 loc_img = self.decoder(self.transformation.inv(z))
                 pyro.sample("obs", dist.Bernoulli(loc_img).to_event(1), obs=x.reshape(-1, self.input_dim))
@@ -126,13 +126,14 @@ class VAE(nn.Module):
                 loc_img, scale_img = self.decoder(self.transformation.inv(z))
                 pyro.sample("obs", dist.LogisticNormal(loc_img, scale_img).to_event(1), obs=x.reshape(-1, self.input_dim))
 
-    def guide(self, x):
+    def guide(self, x, annealing_factor=1.0):
         pyro.module("encoder", self.encoder)
         pyro.module("transformation", self.transformation)
         with pyro.plate("x", x.shape[0]):
             out_dist = self.encoder(x)
             transformed_dist = dist.TransformedDistribution(out_dist, self.transformation)
-            pyro.sample("latent", transformed_dist)
+            with pyro.poutine.scale(None, scale=annealing_factor):
+                pyro.sample("latent", transformed_dist)
 
     def reconstruct_img(self, x):
         out_dist = self.encoder(x)
@@ -140,5 +141,6 @@ class VAE(nn.Module):
         if self.binary:
             loc_img = self.decoder(z)
         else:
-            loc_img, _ = self.decoder(z)
+            raise NotImplementedError
+            # loc_img, _ = self.decoder(z)
         return loc_img

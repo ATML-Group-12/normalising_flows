@@ -37,7 +37,8 @@ import torchvision.transforms as transforms
 import pyro
 import pyro.distributions as dist
 from pyro.infer import SVI, Trace_ELBO
-from pyro.optim import Adam
+from pyro.optim import Adam, RMSprop
+from pyro.optim import PyroOptim
 
 from datetime import datetime
 from tqdm import tqdm
@@ -58,6 +59,7 @@ class Params:
     momentum: float = 0.9
     num_importance: int = 200
     anomaly_detection: bool = False
+    log_all_parameters: bool = False
 
 
 
@@ -74,6 +76,7 @@ def run(params: Params):
     pyro.clear_param_store()
 
     torch.autograd.set_detect_anomaly(params.anomaly_detection)
+    pyro.enable_validation(params.anomaly_detection)
 
     def train(svi, train_loader, use_cuda=False, pbar=None):
         # initialize loss accumulator
@@ -85,7 +88,8 @@ def run(params: Params):
             if use_cuda:
                 x = x.cuda()
             # do ELBO gradient and accumulate loss
-            current_loss = svi.step(x)
+            factor = min(1, (1+pbar.n) / 1e5)
+            current_loss = svi.step(x,annealing_factor=factor)
             epoch_loss += current_loss
             pbar.update(1)
             pbar.set_description(f"loss: {current_loss}", refresh=True)
@@ -99,12 +103,13 @@ def run(params: Params):
         # initialize loss accumulator
         test_loss = 0.
         # compute the loss over the entire test set
-        for x, _ in test_loader:
-            # if on GPU put mini-batch into CUDA memory
-            if use_cuda:
-                x = x.cuda()
-            # compute ELBO estimate and accumulate loss
-            test_loss += svi.evaluate_loss(x)
+        with torch.no_grad():
+            for x, _ in test_loader:
+                # if on GPU put mini-batch into CUDA memory
+                if use_cuda:
+                    x = x.cuda()
+                # compute ELBO estimate and accumulate loss
+                test_loss += svi.evaluate_loss(x)
         normalizer_test = len(test_loader.dataset)
         total_epoch_loss_test = test_loss / normalizer_test
         return total_epoch_loss_test
@@ -139,11 +144,12 @@ def run(params: Params):
         use_cuda=USE_CUDA,
         transformation=transforms,
         z_dim=Z_DIM,
+        binary= params.dataset == "MNIST"
     )
 
     # setup the optimizer
-    adam_args = {"lr": params.lr}
-    optimizer = Adam(adam_args)
+    rms_params = {"lr": params.lr, "momentum": params.momentum}
+    optimizer = RMSprop(rms_params)
 
     # setup the inference algorithm
     importance = Importance(vae.model, guide=None, num_samples=params.num_importance)
@@ -185,20 +191,47 @@ def run(params: Params):
     writer = SummaryWriter(log_dir=f"runs/{params.name}")
 
     pbar = tqdm(range(NUM_ITERATIONS))
-    epoch = 0
-    while pbar.n < NUM_ITERATIONS:
-        total_epoch_loss_train = train(svi, train_loader, use_cuda=USE_CUDA, pbar=pbar)
-        train_elbo.append(-total_epoch_loss_train)
-        # print("[epoch %03d] average training loss: %.4f" % (epoch, total_epoch_loss_train))
-        writer.add_scalar("train_loss", total_epoch_loss_train, pbar.n)
 
-        if epoch % TEST_FREQUENCY == 0:
-            # report test diagnostics
-            total_epoch_loss_test = evaluate(svi, test_loader, use_cuda=USE_CUDA)
-            test_elbo.append(-total_epoch_loss_test)
-            # print("[epoch %03d] average test loss: %.4f" % (epoch, total_epoch_loss_test))
-            writer.add_scalar("test_loss", total_epoch_loss_test, pbar.n)
-        epoch += 1
+    # epoch = 0
+    # while pbar.n < NUM_ITERATIONS:
+    #     total_epoch_loss_train = train(svi, train_loader, use_cuda=USE_CUDA, pbar=pbar)
+    #     train_elbo.append(-total_epoch_loss_train)
+    #     # print("[epoch %03d] average training loss: %.4f" % (epoch, total_epoch_loss_train))
+    #     writer.add_scalar("train_loss", total_epoch_loss_train, pbar.n)
+
+    #     if epoch % TEST_FREQUENCY == 0:
+    #         # report test diagnostics
+    #         total_epoch_loss_test = evaluate(svi, test_loader, use_cuda=USE_CUDA)
+    #         test_elbo.append(-total_epoch_loss_test)
+    #         # print("[epoch %03d] average test loss: %.4f" % (epoch, total_epoch_loss_test))
+    #         writer.add_scalar("test_loss", total_epoch_loss_test, pbar.n)
+    #     epoch += 1
+    
+    while pbar.n < NUM_ITERATIONS:
+        for x, _ in train_loader:
+            # if on GPU put mini-batch into CUDA memory
+            if USE_CUDA:
+                x = x.cuda()
+            # do ELBO gradient and accumulate loss
+            # factor = min(1, (1+pbar.n) / 1e5)
+            factor = 1.0
+            iter_loss = svi.step(x,annealing_factor=factor)
+            writer.add_scalar("train_loss", iter_loss / len(x), pbar.n)
+            pbar.update(1)
+            pbar.postfix = f"loss: {iter_loss / len(x):.4f}"
+            if params.log_all_parameters:
+                writer.add_scalars("para has nan", {k: v.isnan().any() for k, v in vae.named_parameters()}, pbar.n)
+                writer.add_scalars("para grad has nan", {k: v.grad.isnan().any() for k, v in vae.named_parameters()}, pbar.n)
+            if pbar.n % TEST_FREQUENCY == 0:
+                # report test diagnostics
+                total_epoch_loss_test = evaluate(svi, test_loader, use_cuda=USE_CUDA)
+                test_elbo.append(-total_epoch_loss_test)
+                # print("[epoch %03d] average test loss: %.4f" % (epoch, total_epoch_loss_test))
+                writer.add_scalar("test_loss", total_epoch_loss_test, pbar.n)
+            if pbar.n >= NUM_ITERATIONS:
+                break
+            
+
     
     writer.close()
     torch.save(vae.state_dict(), f"runs/{params.name}/model.pt")
@@ -214,16 +247,17 @@ if __name__ == "__main__":
         return DiagonalScaling
 
     for dataset in datasets:
-        #params = Params(
-        #     layer_type=dummy,
-        #     dataset=dataset,
-        #     flow_length=0,
-        #    name=f"{start_datetime}/{dataset}-diagscaling",
-        #    anomaly_detection=True,
-        #)
-        #print("Running", params.name)
-        #run(params)
-        #print("Done")
+        params = Params(
+            layer_type=dummy,
+            dataset=dataset,
+            flow_length=0,
+            name=f"{start_datetime}/{dataset}-diagscaling",
+            # anomaly_detection=True,
+            # log_all_parameters=True,
+        )
+        print("Running", params.name)
+        run(params)
+        print("Done")
         print("-" * 40)
         for flow_length in flow_lengths:
             for layer_name, layer_type in layer_types.items():
