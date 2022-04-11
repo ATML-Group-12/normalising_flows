@@ -181,9 +181,16 @@ where $(A,B)$ is a partition of $\{1,2,\dots,D\}$, $h$ is a neural network with 
     
     \begin{block}{Our Improvements and Extensions}
     
-	\textbf{TODO} Pellentesque vitae dui velit. Aenean tincidunt eros facilisis turpis tincidunt, non mollis ipsum venenatis. Praesent consectetur venenatis est, quis rutrum justo faucibus vitae. Nam id orci ex. Aenean id finibus libero. Nam tristique pellentesque eros et mattis. Proin vel nunc accumsan, aliquet leo ut, consectetur sem. Ut ut elit libero. Donec aliquet nulla ac venenatis egestas. Maecenas eu nunc hendrerit turpis dictum laoreet at ut velit. Phasellus tempus tellus id leo bibendum, ac rhoncus turpis molestie. Quisque commodo, quam vitae elementum fermentum, erat dolor hendrerit quam, bibendum malesuada lectus lacus sit amet nisi. In dignissim nisl elit. Aenean vitae enim ut ligula congue vehicula sed non lacus.    
+	To extend the results of the paper, we also looked to what other kinds of flows we could implement.
+	The authors of Invertible Convolutional Flows have used transformations whose determinants are \textit{circulant matrices}, which will allow computation of the log determinant, as well as the convolution and its inverse, to be calculated in time $\mathcal{O}(N \log N)$ by making use of Discrete Fourier Transforms (DTFs). Since it had no public implementations, we decided to implement this - Circular Convolutional Flows.
+	
 	
 	\end{block}
+	
+	\begin{center}
+        \includegraphics[width=0.5\columnwidth]{circular_conv_test_loss.png}\\
+        \textit{Figure: Test Loss over 5000 epochs using Circular Convolutional Flows}
+      \end{center}
 
     \begin{block}{References}
       \nocite{*} % Insert publications even if they are not cited in the poster
