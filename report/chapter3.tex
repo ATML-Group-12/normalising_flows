@@ -29,3 +29,12 @@ Moreover, by continuing to work in the Fourier space, we can also compute the co
 \end{equation}
 
 \section{Our Experiment}
+
+The circular convolutional flows was tested on the MNIST dataset using a flow length of 10 only. This was mainly due to resource limitations, training the model with larger flow lengths proved infeasible in the time we had.
+
+\section{Results}
+
+\includegraphics[scale=0.5]{circular_conv_test_loss.png}
+
+After 5000 epochs of training, the train and test loss were both still decreasing, so additional training time is likely to have produced an even better model.
+Also due to this limitation, it is difficult to tell whether the circular convolutional flows would have produced a better model than the normalising flows in our main experiments. 
