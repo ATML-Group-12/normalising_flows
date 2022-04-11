@@ -130,26 +130,28 @@
   \begin{column}{.3\textwidth} % 2nd column
     \vspace{\shrink}
     \begin{block}{Theoretical Background}
-      Normalizing flows 
-    \end{block}
+      The authors compare their work with NICE, which introduces coupling layers. A coupling layer $f$ is a neural network layer with easy to compute inverse and a trivial Jacobian. For an input vector $\mathbf{z} \in \mathbb{R}^D$, we have
+\begin{equation}
+f(\mathbf{z}) = (\mathbf{z}_A, g(\mathbf{z}_B,h(\mathbf{z}_A))) 
+\end{equation}
+\begin{equation}
+f^{-1}(\mathbf{z}) = (\mathbf{z}_A, g^{-1}(\mathbf{z}_B,h(\mathbf{z}_A)))
+\end{equation}
+where $(A,B)$ is a partition of $\{1,2,\dots,D\}$, $h$ is a neural network with input size $|A|$, and $g$ is a coupling law, a function that is invertible for the first argument given the second. When $g(a,b)=a+b$, the Jacobian is the identity matrix, so $f$ is classified as a volume-preserving flow.
+\end{block}
 
     
-     \begin{center}
+          
+      \begin{block}{Experiments}
+     	We compare expressivity of normalizing flows with NICE coupling layers. We also added in diagonal scaling for NICE layers since this was not accounted for in the original results.
+      \end{block}
+      
+      \begin{center}
 	\includegraphics[width=0.9\columnwidth]{EFs-ours}
       \end{center}
       
-      \begin{block}{Experiments}
-      \begin{itemize}
-      	\item DLGM + NF
-      	\item DLGM + NICE
-      \end{itemize}
       
-      \end{block}
-      
-      
-	\begin{center}
-        \includegraphics[width=0.9\columnwidth]{varbound}
-      \end{center}
+    
 
   \end{column} % End of the 2nd column
   
@@ -163,14 +165,18 @@
   \begin{column}{.3\textwidth} % 3rd column
 
     \vspace{\shrink} 
-    \begin{block}{Results}
-        \textbf{TODO!!!}         
-      Results...
-    \end{block}
+   \begin{block}{Results}
+      The range of variational bounds is close to those from the paper, but the shapes are visibly inconsistent. We suspect this is due to the ``parameter updates" being iterations or epochs, as well as the model being not well-specified in the paper. We do note that among NICE-based models, those with diagonal scaling do perform better than their counterparts.
+      \end{block}
     
-       \begin{center}
-        \includegraphics[width=0.9\columnwidth]{flowlen}
-      \end{center}
+      \begin{figure}
+     	\centering
+	\includegraphics[width=0.45\columnwidth]{u1}
+	\includegraphics[width=0.45\columnwidth]{u2}
+	\includegraphics[width=0.45\columnwidth]{u3}
+	\includegraphics[width=0.45\columnwidth]{u4}
+	\caption{(d) Variational bounds}
+      \end{figure}
     
     
     \begin{block}{Our Improvements and Extensions}
