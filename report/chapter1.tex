@@ -1,7 +1,68 @@
-\chapter{Normalizing Flows}
+\chapter{Main Theory}
+\section{Variational Inference}
+As stated in the introduction, Variational Inference is a method of performing Bayesian inference which has become increasingly popular over the last few years. 
+The basic idea is to approximate the posterior distribution, typically by defining a family of distributions which can be parameterised, and then optimising the "Evidence Lower Bound" (ELBO) with respect to these parameters in order to find a distribution which closely approximates the true posterior. The ELBO can be thought of as a lower bound of the marginal likelihood of a probabilistic model.
+
+\subsection{Definition}
+Suppose we wish to find the posterior:
+\begin{equation}
+	p_\theta(\mathbf{z|x}) = \frac{p_\theta(\mathbf{z, x})}{p_\theta(\mathbf{x})}
+\end{equation}
+However, to calculate $p_\theta(\mathbf{x})$ requires the calculation of an integral which is in pratice intractable:
+
+\begin{equation}
+	p_\theta(\mathbf{x}) = \int p_\theta(\mathbf{x|z})p_\theta(\mathbf{z}) d\mathbf{z}
+\end{equation}
+
+In variational inference, we aim to approximate the posterior with a distribution $q_\phi(\mathbf{z|x})$ which is parameterised by $\phi$, and the aim is to find $\phi$ such that $q_\phi(\mathbf{z|x})$ approximates $p_\theta(\mathbf{z|x})$ as closely as possible. The measure of closeness we choose to use is called the KL-divergence, defined as:
+ 
+ \begin{equation}
+	\mathbb{D}_{\text{KL}}(q_\phi(\mathbf{z|x})||p_\theta(\mathbf{z|x})) = \int q_\phi(\mathbf{z}) \log \frac{q_\phi(\mathbf{z|x})}{p_\theta(\mathbf{z|x})} d\mathbf{z}
+\end{equation}
+
+\subsection{The Evidence Lower Bound}
+
+In order to minimise KL-divergence, we need to be able to calculate it. However, this is also intractable since the term $p_\theta(\mathbf{z|x})$ is just our original posterior. But rearranging we get:
+\begin{equation}
+	\mathbb{D}_{\text{KL}}(q_\phi(\mathbf{z|x})||p_\theta(\mathbf{x})) = \mathbb{E}_q[\log q_\phi(\mathbf{z|x})] - \mathbb{E}_q[\log p_\theta(\mathbf{z,x})] + \log p_\theta(\mathbf{x})
+\end{equation}
+
+Since KL-divergence is always non-negative, the quantity $ \mathbb{E}_q[\log p_\theta(\mathbf{z|x}) - \log q_\phi(\mathbf{z|x})] $ is therefore a lower bound for the marginal log likelihood $ \log p_\theta(\mathbf{z|x})$. We hence define:
+ \begin{equation}
+ 	\text{Evidence Lower Bound (ELBO)} = \mathbb{E}_q[\log p_\theta(\mathbf{z|x}) - \log q_\phi(\mathbf{z|x})]
+ \end{equation}  
+ and seeking to maximise the ELBO both minimises the KL-divergence between $q_\phi(\mathbf{z|x})$ and $p_\theta(\mathbf{z|x})$, and maximises the evidence $p_\theta(\mathbf{x})$.
+
+So to perform variational inference, we use some method of optimisation to maximise the ELBO over parameters $\phi$. This is normally done using stochastic gradient descent. However, this method relies heavily on a) efficiently computing the derivative of the log likelihood $ \nabla_\phi\mathbb{E}_{q_\phi(z)}[\log p(\mathbf{x|z})] $ and b) having a good family of approximate posterior distributions $q_\theta$. Specifically we need to be able to capture a diverse range of distributions while also being computationally feasible. The authors of the paper aim to address this problem using normalising flows, which we discuss later on.
+
+\subsection{Stochastic Backpropagation}
+
+Stochastic Backpropagation is a method of computing the gradient of the expected log-likelihood which was used by the authors in their models. Since this step of variational inference is not a focus of the paper, we give only a brief overview.
+
+Stochastic backpropagation involves two main steps. First, the latent variables are re-parameterised in terms of a known distribution using a differentiable transformation. For example we might transform a Gaussian distribution onto the standard normal distribution by using a location-scale transformation. 
+
+The second step is do backpropagation with respect to the parameters $\phi$, which we can now do since with our re-parameterised distribution since it has a known derivative, using a Monte Carlo method that draws from the known base distribution:
+
+\begin{equation}
+	\nabla_\phi\mathbb{E}_{q_\phi(z)}[f_\theta(z)] \Leftrightarrow \mathbb{E}_{\mathcal{N}(\epsilon |0,1)}[\nabla_\phi f_\theta(\mu + \sigma\epsilon)]
+\end{equation}
+
+\subsection{Deep Latent Gaussian Models}
+Deep Latent Gaussian Model (DLGMs) are a general class of graphical models which uses a hierarchy of Gaussian latent variables. To generate a sample from the model, we draw from a Gaussian distribution at the top ($L$'th) layer. Then the activation $h_l$ of the lower layers is calculated as a non-linear transformation (typically an MLP) of the layer above, perturbed by some Gaussian noise.
+
+Formally, the process of generating a sample from a DLGM is as follows:
+
+\[ \xi_l \sim \mathcal{N}(\mathbf{\xi}_l |0, I), \;\;\; l=1,...,L \tag{1} \]
+\[ \mathbf{h}_L = G_L\xi_L, \tag{2} \]
+\[ \mathbf{h}_l = T_l(\mathbf{h}_{l+1}) + \mathbf{G}_l\mathbf{\xi}_l, \;\;\; l=1,...,L-1 \tag{3} \]
+\[ \mathbf{v} \sim \pi(\mathbf{v}|T_0(\mathbf{h}_1)), \tag{4} \]
+
+where the $\xi_l$ are independent Gaussian variables, the $T_l$ are MLPs and the $G_l$ are matrices. At the bottom, we generate the sample from any distribution $\pi(\mathbf{v}|.)$, whose parameters are given by a transformation of the bottom latent layer of the model.
+
+\section{Normalizing Flows}
 In the attempt to generate more complex families of posterior distributions, which should allow for better estimates of the true posterior, the paper introduces the idea of normalizing flows. A normalizing flow is a sequence of invertible transformations applied to a simple initial distribution (for example a unit gaussian), resulting in a complex distribution, whose density we can efficiently evaluate by inverting the flow and keeping track of the Jacobian of the composition of transformations, using the change of variable theorem.
 
-\section{Definition}
+\subsection{Definition}
 
 More formally, consider a member of the flow's sequence of transformations to be an invertible, smooth mapping $f:\mathbb{R}^d \rightarrow \mathbb{R}^d$. Let $\mathbf{y}=f(\mathbf{z})$ be the outcome of applying the transformation to a random variable $\mathbf{z}$ with distribution $q(\mathbf{z})$. Then, using the change of variable theorem, the resulting density is:
 \[ q(\mathbf{y}) = q(\mathbf{z}) \left| \det \frac{\partial f^{-1}(\mathbf{y})}{\partial \mathbf{y}}  \right| = q(\mathbf{z}) \left| \det \frac{\partial f(\mathbf{z})}{\partial \mathbf{z}} \right| ^ {-1} \]
@@ -12,12 +73,12 @@ We can then proceed to build more complicated densities by systematically compos
 \[ \ln q_K(\mathbf{z_K}) = \ln q_0(\mathbf{z_0}) - \sum_{k=1}^{K} \ln \left| \det \frac{\partial f_k}{\partial \mathbf{z_{k-1}}} \right|  \]
 where the first equation represents the sequence of random variables generated by the flow.  The normalizing flow is then defined as the path of the successive distributions $q_k$. 
 
-\section{Law of the Unconscious Statistician}
+\subsection{Law of the Unconscious Statistician}
 A useful property of these transformations is what is known as the law of the unconscious statistician (LOTUS). The LOTUS refers to the fact that we can evaluate expectations with respect to the transformed density $q_K$ without explicitly knowing it, by expressing any such expectation as:
 \[ \mathbb{E}_{q_K} = \mathbb{E}_{q_0}[h(f_K \circ ... \circ f_2 \circ f_1(\mathbf{z_0}))] \]
 This is an expectation over the known density $q_0$, which does not require computation of the logdet-Jacobian terms when $h(\mathbf{z})$ does not depend on $q_K$.
 
-\section{Invertible Linear-time Transformations}
+\subsection{Invertible Linear-time Transformations}
 Notice that a naive choice of these transformations would lead to a $O(d^3)$ complexity to compute the determinant of the Jacobian. Therefore, the classes of flows studied in our report are all based on the idea of having an efficient way to calculate this determinant. We begin by investigating two types of linear flows, namely planar and radial flows. 
 
 \subsection{Planar Flows}
@@ -35,5 +96,3 @@ The other family of invertible linear-time transformations studied is defined by
 where $r=\left| \mathbf{z}-\mathbf{z_0}\right|$, $h(\alpha,r) = 1/(\alpha+r)$, and the set of parameters is $\lambda = \{ \mathbf{z_0}\in \mathbb{R}^D, \alpha \in \mathbb{R} ^{+}, \beta \in \mathbb{R} \}$. The time-complexity of the computation of the determinant of this class is also linear:
 \[ \left| \det \frac{\partial f}{\partial \mathbf{z}} \right| = [1+\beta h(\alpha ,r)]^{d-1}[1+\beta h(\alpha ,r)+\beta h'(\alpha ,r)] \] % fix this equation
 This transformation results in radial contractions and expansions around the reference point $\mathbf{z_0}$, hence the name radial flows.
-
-
