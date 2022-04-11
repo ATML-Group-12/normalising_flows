@@ -9,6 +9,18 @@ from pyro.distributions.torch_transform import TransformModule
 from pyro.distributions.transforms import ComposeTransformModule
 
 
+class MaxOut(nn.Module):
+    def __init__(self, input_size: int, window_size: int):
+        super().__init__()
+        self.input_size = input_size
+        self.window_size = window_size
+
+    def forward(self, x):
+        all_but_last = x.size()[:-1]
+        u = x.view(*all_but_last, self.input_size // self.window_size, self.window_size)
+        u, _ = torch.max(u, dim=-1)
+        return u
+
 class InferenceNetwork(nn.Module):
     """
     The inference network or encoder is a nn which takes in an image and outputs
@@ -19,13 +31,14 @@ class InferenceNetwork(nn.Module):
         super().__init__()
         self.input_dim = input_dim
         self.fc1 = nn.Linear(self.input_dim, hidden_dim)
-        self.fc21 = nn.Linear(hidden_dim, z_dim)
-        self.fc22 = nn.Linear(hidden_dim, z_dim)
-        self.softplus = nn.Softplus()
+        self.fc21 = nn.Linear(hidden_dim // 4, z_dim)
+        self.fc22 = nn.Linear(hidden_dim // 4, z_dim)
+        self.activation = MaxOut(hidden_dim, 4)
+
 
     def forward(self, x) -> dist.Distribution:
         x = x.reshape(-1, self.input_dim)
-        hidden = self.softplus(self.fc1(x))
+        hidden = self.activation(self.fc1(x))
         z_loc = self.fc21(hidden)
         z_scale = torch.exp(self.fc22(hidden))
         return dist.Normal(z_loc, z_scale)
@@ -87,6 +100,9 @@ class VAE(nn.Module):
         self.transformation = ComposeTransformModule(transformation)
         if use_cuda:
             self.cuda()
+            self.transformation = self.transformation.cuda()
+            self.encoder = self.encoder.cuda()
+            self.decoder = self.decoder.cuda()
         self.use_cuda = use_cuda
         self.z_dim = z_dim
         self.binary = binary

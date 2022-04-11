@@ -67,7 +67,7 @@ def run(params: Params):
     torch.manual_seed(params.seed)
 
     USE_CUDA = torch.cuda.is_available()
-    NUM_ITERATIONS = 10 if smoke_test else params.num_updates // 100
+    NUM_ITERATIONS = 10 if smoke_test else params.num_updates // 40
     TEST_FREQUENCY = 2
     BATCH_SIZE = 100
 
@@ -85,8 +85,10 @@ def run(params: Params):
             if use_cuda:
                 x = x.cuda()
             # do ELBO gradient and accumulate loss
-            epoch_loss += svi.step(x)
+            current_loss = svi.step(x)
+            epoch_loss += current_loss
             pbar.update(1)
+            pbar.set_description(f"loss: {current_loss}", refresh=True)
 
         # return epoch loss
         normalizer_train = len(train_loader.dataset)
@@ -154,26 +156,26 @@ def run(params: Params):
     
     obs = torch.stack(list(itertools.islice([x[0] for x in observe], 5)))
 
-    posterior = importance.run(
-        obs
-    )
-    print(posterior)
-    print(obs.shape)
-    emp_marginal = EmpiricalMarginal(
-        posterior, sites=["latent"]
-    )
+    # posterior = importance.run(
+    #    obs
+    # )
+    # print(posterior)
+    # print(obs.shape)
+    # emp_marginal = EmpiricalMarginal(
+    #     posterior, sites=["latent"]
+    # )
 
     # calculate statistics over posterior samples
-    posterior_mean = emp_marginal.mean
-    posterior_std_dev = emp_marginal.variance.sqrt()
+    # posterior_mean = emp_marginal.mean
+    # posterior_std_dev = emp_marginal.variance.sqrt()
 
     # report results
-    inferred_mu = posterior_mean.detach().numpy()
-    inferred_mu_uncertainty = posterior_std_dev.detach().numpy()
+    # inferred_mu = posterior_mean.detach().numpy()
+    # inferred_mu_uncertainty = posterior_std_dev.detach().numpy()
     # print("inferred mu: {}".format(inferred_mu))
     # print("inferred mu uncertainty: {}".format(inferred_mu_uncertainty))
-    print("inferred mu shape: {}".format(inferred_mu.shape))
-    print("inferred mu uncertainty shape: {}".format(inferred_mu_uncertainty.shape))
+    # print("inferred mu shape: {}".format(inferred_mu.shape))
+    # print("inferred mu uncertainty shape: {}".format(inferred_mu_uncertainty.shape))
     pyro.clear_param_store()
     svi = SVI(vae.model, vae.guide, optimizer, loss=Trace_ELBO())
 
@@ -205,23 +207,23 @@ def run(params: Params):
 if __name__ == "__main__":
     start_datetime = datetime.now().strftime("%Y%m%d-%H%M%S")
     datasets = ["MNIST","CIFAR"]
-    layer_types = {"radialflow": RadialFlow, "planarflow": PlanarFlow, "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
+    layer_types = { "planarflow": PlanarFlow,"radialflow": RadialFlow, "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
     flow_lengths = [10,20,40,80]
 
     def dummy(x: torch.Tensor) -> TransformModule:
         return DiagonalScaling
 
     for dataset in datasets:
-        params = Params(
-            layer_type=dummy,
-            dataset=dataset,
-            flow_length=0,
-            name=f"{start_datetime}/{dataset}-diagscaling",
-            anomaly_detection=True,
-        )
-        print("Running", params.name)
-        run(params)
-        print("Done")
+        #params = Params(
+        #     layer_type=dummy,
+        #     dataset=dataset,
+        #     flow_length=0,
+        #    name=f"{start_datetime}/{dataset}-diagscaling",
+        #    anomaly_detection=True,
+        #)
+        #print("Running", params.name)
+        #run(params)
+        #print("Done")
         print("-" * 40)
         for flow_length in flow_lengths:
             for layer_name, layer_type in layer_types.items():
