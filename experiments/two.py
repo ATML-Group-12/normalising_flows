@@ -1,5 +1,3 @@
-
-
 import random
 from dataclasses import dataclass
 from typing import Callable
@@ -11,6 +9,7 @@ import torch
 from datasets.mnist import BinarisedMNIST
 from datasets.cifar import CustomCIFAR
 from flows.embedding.dlgm import VAE
+from flows.flow.convolutional import CircularConvFlow
 from flows.flow.planar import PlanarFlow
 from flows.flow.radial import RadialFlow
 from nice.layer.nice_ortho import NiceOrthogonal
@@ -49,7 +48,7 @@ smoke_test = 'CI' in os.environ
 @dataclass
 class Params:
     layer_type: Callable[..., TransformModule]
-    name : str
+    name: str
     flow_length: int = 2
     seed: int = 0
     dataset: str = "MNIST"
@@ -62,9 +61,8 @@ class Params:
     log_all_parameters: bool = False
 
 
-
 def run(params: Params):
-    
+
     random.seed(params.seed)
     np.random.seed(params.seed)
     torch.manual_seed(params.seed)
@@ -72,7 +70,7 @@ def run(params: Params):
     USE_CUDA = torch.cuda.is_available()
     NUM_ITERATIONS = 10 if smoke_test else params.num_updates // 40
     TEST_FREQUENCY = 2
-    BATCH_SIZE = 500
+    BATCH_SIZE = 100
 
     pyro.clear_param_store()
 
@@ -90,7 +88,7 @@ def run(params: Params):
                 x = x.cuda()
             # do ELBO gradient and accumulate loss
             factor = min(1, (1+pbar.n) / 1e5)
-            current_loss = svi.step(x,annealing_factor=factor)
+            current_loss = svi.step(x)
             epoch_loss += current_loss
             pbar.update(1)
             pbar.set_description(f"loss: {current_loss}", refresh=True)
@@ -117,27 +115,27 @@ def run(params: Params):
 
     if params.dataset == "MNIST":
         train_loader = torch.utils.data.DataLoader(dataset=BinarisedMNIST(root='./data', train=True, download=True),
-                                                batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
+                                                   batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
         test_loader = torch.utils.data.DataLoader(dataset=BinarisedMNIST(root='./data', train=False, download=True),
-                                                batch_size=BATCH_SIZE, shuffle=True)
+                                                  batch_size=BATCH_SIZE, shuffle=True)
     elif params.dataset == "CIFAR":
         train_loader = torch.utils.data.DataLoader(dataset=CustomCIFAR(root='./data', train=True, download=True),
-                                                batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
+                                                   batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(dataset=CustomCIFAR(root='./data', train=False, download=True),
-                                                batch_size=BATCH_SIZE, shuffle=True)
+                                                  batch_size=BATCH_SIZE, shuffle=True)
     else:
         raise ValueError(f"Unknown dataset: {params.dataset}")
     # clear param store
 
     Z_DIM = 40 if params.dataset == "MNIST" else 30
-    if "flow" in params.name:
+    if params.layer_type == CircularConvFlow:
+        transforms = [CircularConvFlow((Z_DIM,)) for _ in range(params.flow_length)]
+    elif "flow" in params.name:
         transforms = [params.layer_type(Z_DIM) for _ in range(params.flow_length)]
     elif "nice" in params.name:
         transforms = [params.layer_type(Z_DIM, Z_DIM//2, 4, Z_DIM) for _ in range(params.flow_length)]
     else:
         transforms = [DiagonalScaling(Z_DIM)]
-
-
 
     # setup the VAE
     vae = VAE(
@@ -145,44 +143,18 @@ def run(params: Params):
         use_cuda=USE_CUDA,
         transformation=transforms,
         z_dim=Z_DIM,
-        binary= params.dataset == "MNIST"
+        binary=params.dataset == "MNIST"
     )
 
     # setup the optimizer
     rms_params = {"lr": params.lr, "momentum": params.momentum}
     optimizer = RMSprop(rms_params)
 
-    # setup the inference algorithm
-    # importance = Importance(vae.model, guide=None, num_samples=params.num_importance)
-    # print("doing importance sampling...")
-    
     if params.dataset == "MNIST":
         observe = BinarisedMNIST(root='./data', train=True, download=True)
     elif params.dataset == "CIFAR":
         observe = CustomCIFAR(root='./data', train=True, download=True)
-    
-    obs = torch.stack(list(itertools.islice([x[0] for x in observe], 5)))
 
-    # posterior = importance.run(
-    #    obs
-    # )
-    # print(posterior)
-    # print(obs.shape)
-    # emp_marginal = EmpiricalMarginal(
-    #     posterior, sites=["latent"]
-    # )
-
-    # calculate statistics over posterior samples
-    # posterior_mean = emp_marginal.mean
-    # posterior_std_dev = emp_marginal.variance.sqrt()
-
-    # report results
-    # inferred_mu = posterior_mean.detach().numpy()
-    # inferred_mu_uncertainty = posterior_std_dev.detach().numpy()
-    # print("inferred mu: {}".format(inferred_mu))
-    # print("inferred mu uncertainty: {}".format(inferred_mu_uncertainty))
-    # print("inferred mu shape: {}".format(inferred_mu.shape))
-    # print("inferred mu uncertainty shape: {}".format(inferred_mu_uncertainty.shape))
     pyro.clear_param_store()
     svi = SVI(vae.model, vae.guide, optimizer, loss=Trace_ELBO())
 
@@ -193,22 +165,6 @@ def run(params: Params):
 
     pbar = tqdm(range(NUM_ITERATIONS))
 
-    # epoch = 0
-    # while pbar.n < NUM_ITERATIONS:
-    #     total_epoch_loss_train = train(svi, train_loader, use_cuda=USE_CUDA, pbar=pbar)
-    #     train_elbo.append(-total_epoch_loss_train)
-    #     # print("[epoch %03d] average training loss: %.4f" % (epoch, total_epoch_loss_train))
-    #     writer.add_scalar("train_loss", total_epoch_loss_train, pbar.n)
-
-    #     if epoch % TEST_FREQUENCY == 0:
-    #         # report test diagnostics
-    #         total_epoch_loss_test = evaluate(svi, test_loader, use_cuda=USE_CUDA)
-    #         test_elbo.append(-total_epoch_loss_test)
-    #         # print("[epoch %03d] average test loss: %.4f" % (epoch, total_epoch_loss_test))
-    #         writer.add_scalar("test_loss", total_epoch_loss_test, pbar.n)
-    #     epoch += 1
-
-    
     while pbar.n < NUM_ITERATIONS:
         iterator = iter(train_loader)
         for x, _ in iterator:
@@ -218,34 +174,35 @@ def run(params: Params):
             # do ELBO gradient and accumulate loss
             # factor = min(1, (1+pbar.n) / 1e5)
             factor = 1.0
-            iter_loss = svi.step(x,annealing_factor=factor)
+            iter_loss = svi.step(x)
             writer.add_scalar("train_loss", iter_loss / len(x), pbar.n)
             pbar.update(1)
             pbar.postfix = f"loss: {iter_loss / len(x):.4f}"
             if params.log_all_parameters:
                 writer.add_scalars("para has nan", {k: v.isnan().any() for k, v in vae.named_parameters()}, pbar.n)
-                writer.add_scalars("para grad has nan", {k: v.grad.isnan().any() for k, v in vae.named_parameters()}, pbar.n)
+                writer.add_scalars("para grad has nan", {k: v.grad.isnan().any()
+                                   for k, v in vae.named_parameters()}, pbar.n)
             if pbar.n % TEST_FREQUENCY == 0:
                 # report test diagnostics
                 total_epoch_loss_test = evaluate(svi, test_loader, use_cuda=USE_CUDA)
                 test_elbo.append(-total_epoch_loss_test)
                 # print("[epoch %03d] average test loss: %.4f" % (epoch, total_epoch_loss_test))
                 writer.add_scalar("test_loss", total_epoch_loss_test, pbar.n)
-
+            # if pbar.n >= 10:
+            #     break
             if pbar.n >= NUM_ITERATIONS:
                 break
-            
 
-    
     writer.close()
     torch.save(vae.state_dict(), f"runs/{params.name}/model.pt")
 
 
 if __name__ == "__main__":
     start_datetime = datetime.now().strftime("%Y%m%d-%H%M%S")
-    datasets = ["MNIST","CIFAR"]
-    layer_types = { "radialflow": RadialFlow, "planarflow": PlanarFlow,"niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
-    flow_lengths = [10,20,40,80]
+    datasets = ["MNIST", "CIFAR"]
+    layer_types = {"planarflow": PlanarFlow, "radialflow": RadialFlow,
+                   "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation, "convflow": CircularConvFlow}
+    flow_lengths = [10, 20, 40, 80]
 
     def dummy(x: torch.Tensor) -> TransformModule:
         return DiagonalScaling
@@ -275,6 +232,3 @@ if __name__ == "__main__":
                 run(params)
                 print("Done")
                 print("-" * 40)
-                break
-            break
-        break
