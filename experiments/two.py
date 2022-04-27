@@ -64,6 +64,7 @@ class Params:
 
 
 def run(params: Params):
+    
     random.seed(params.seed)
     np.random.seed(params.seed)
     torch.manual_seed(params.seed)
@@ -71,7 +72,7 @@ def run(params: Params):
     USE_CUDA = torch.cuda.is_available()
     NUM_ITERATIONS = 10 if smoke_test else params.num_updates // 40
     TEST_FREQUENCY = 2
-    BATCH_SIZE = 100
+    BATCH_SIZE = 500
 
     pyro.clear_param_store()
 
@@ -116,12 +117,12 @@ def run(params: Params):
 
     if params.dataset == "MNIST":
         train_loader = torch.utils.data.DataLoader(dataset=BinarisedMNIST(root='./data', train=True, download=True),
-                                                batch_size=BATCH_SIZE, shuffle=True)
+                                                batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
         test_loader = torch.utils.data.DataLoader(dataset=BinarisedMNIST(root='./data', train=False, download=True),
                                                 batch_size=BATCH_SIZE, shuffle=True)
     elif params.dataset == "CIFAR":
         train_loader = torch.utils.data.DataLoader(dataset=CustomCIFAR(root='./data', train=True, download=True),
-                                                batch_size=BATCH_SIZE, shuffle=True)
+                                                batch_size=BATCH_SIZE, shuffle=True, pin_memory=True)
         test_loader = torch.utils.data.DataLoader(dataset=CustomCIFAR(root='./data', train=False, download=True),
                                                 batch_size=BATCH_SIZE, shuffle=True)
     else:
@@ -152,8 +153,8 @@ def run(params: Params):
     optimizer = RMSprop(rms_params)
 
     # setup the inference algorithm
-    importance = Importance(vae.model, guide=None, num_samples=params.num_importance)
-    print("doing importance sampling...")
+    # importance = Importance(vae.model, guide=None, num_samples=params.num_importance)
+    # print("doing importance sampling...")
     
     if params.dataset == "MNIST":
         observe = BinarisedMNIST(root='./data', train=True, download=True)
@@ -206,9 +207,11 @@ def run(params: Params):
     #         # print("[epoch %03d] average test loss: %.4f" % (epoch, total_epoch_loss_test))
     #         writer.add_scalar("test_loss", total_epoch_loss_test, pbar.n)
     #     epoch += 1
+
     
     while pbar.n < NUM_ITERATIONS:
-        for x, _ in train_loader:
+        iterator = iter(train_loader)
+        for x, _ in iterator:
             # if on GPU put mini-batch into CUDA memory
             if USE_CUDA:
                 x = x.cuda()
@@ -228,6 +231,7 @@ def run(params: Params):
                 test_elbo.append(-total_epoch_loss_test)
                 # print("[epoch %03d] average test loss: %.4f" % (epoch, total_epoch_loss_test))
                 writer.add_scalar("test_loss", total_epoch_loss_test, pbar.n)
+
             if pbar.n >= NUM_ITERATIONS:
                 break
             
@@ -240,7 +244,7 @@ def run(params: Params):
 if __name__ == "__main__":
     start_datetime = datetime.now().strftime("%Y%m%d-%H%M%S")
     datasets = ["MNIST","CIFAR"]
-    layer_types = { "planarflow": PlanarFlow,"radialflow": RadialFlow, "niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
+    layer_types = { "radialflow": RadialFlow, "planarflow": PlanarFlow,"niceorthogonal": NiceOrthogonal, "nicepermutation": NicePermutation}
     flow_lengths = [10,20,40,80]
 
     def dummy(x: torch.Tensor) -> TransformModule:
@@ -256,7 +260,7 @@ if __name__ == "__main__":
             # log_all_parameters=True,
         )
         print("Running", params.name)
-        run(params)
+        # run(params)
         print("Done")
         print("-" * 40)
         for flow_length in flow_lengths:
@@ -271,3 +275,6 @@ if __name__ == "__main__":
                 run(params)
                 print("Done")
                 print("-" * 40)
+                break
+            break
+        break

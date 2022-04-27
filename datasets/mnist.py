@@ -3,7 +3,7 @@ import torchvision
 
 
 class BinarisedMNIST(torch.utils.data.Dataset):
-    def __init__(self, root, train=True, transform=None, target_transform=None, download=False):
+    def __init__(self, root, train=True, transform=None, target_transform=None, download=False, precompute=True):
         self.root = root
         self.train = train
         self.transform = transform
@@ -30,9 +30,15 @@ class BinarisedMNIST(torch.utils.data.Dataset):
                     torchvision.transforms.Lambda(lambda x: torch.bernoulli(x)),
                 ])
             )
+        if precompute:
+            res = []
+            for i in range(len(self.data)):
+                res.append(self.data[i])
+            self.data = res
+            
 
-    def __getitem__(self, index):
-        img, target = self.data[index]
+    def preproc(self, t):
+        img, target = t
 
         if self.transform is not None:
             img = self.transform(img)
@@ -41,6 +47,10 @@ class BinarisedMNIST(torch.utils.data.Dataset):
             target = self.target_transform(target)
 
         return img, target
+
+
+    def __getitem__(self, index):
+        return self.preproc(self.data[index])
 
     def __len__(self):
         return len(self.data)
