@@ -19,7 +19,7 @@ class CircularConvFlow(TransformModule):
         super().__init__()
         self.d = input_size
         self.dims = tuple([-1 - i for i in range(len(input_size))])
-        self.w = torch.nn.Parameter(torch.fft.fftn(torch.randn(*self.d)))
+        self._w = torch.nn.Parameter(torch.randn(*self.d))
 
     def _call(self, x: torch.Tensor) -> torch.Tensor:
         """Using proposition 1a in the paper:
@@ -27,8 +27,9 @@ class CircularConvFlow(TransformModule):
             yf(n) = wf(n) * xf(n) in forier space
 
         """
+        w = torch.fft.fftn(self._w)
         return torch.fft.ifftn(
-            torch.mul(self.w, torch.fft.fftn(x, dim=self.dims)),
+            torch.mul(w, torch.fft.fftn(x, dim=self.dims)),
             dim=self.dims).real
 
     def log_abs_det_jacobian(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
@@ -41,7 +42,6 @@ class CircularConvFlow(TransformModule):
         """
         w = (1. / torch.fft.fftn(x, dim=self.dims)) * torch.fft.fftn(y, dim=self.dims)
         value = torch.sum(torch.log(w.abs().real), dim=self.dims)
-
         return value
 
     def _inverse(self, y: torch.Tensor) -> torch.Tensor:
@@ -54,8 +54,9 @@ class CircularConvFlow(TransformModule):
             Then we return x which is the inverse DFT of x_f
 
         """
+        w = torch.fft.fftn(self._w)
         y_f = torch.fft.fftn(y, dim=self.dims)
-        x_f = torch.mul(1. / self.w, y_f)
+        x_f = torch.mul(1. / w, y_f)
         return torch.fft.ifftn(x_f, dim=self.dims).real
 
 
